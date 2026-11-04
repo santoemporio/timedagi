@@ -656,14 +656,14 @@ let db=null,contatosSub=null;
 const cfg=()=>state.config||DEF;
 function failMsg(e){if(e&&e.code==="quota_exceeded")return"O banco desta página está cheio.";if(e&&e.code==="invalid_argument")return"Seu acesso a esta página não permite salvar isso. Peça acesso de edição.";return"Não foi possível salvar. Tente de novo."}
 const api={
-  async set(col,id,obj){obj=Object.assign({},obj);delete obj.id;
+  async set(col,id,obj){dirtyAt=0;obj=Object.assign({},obj);delete obj.id;
     if(db){try{await db.collection(col).doc(id).set(obj);return true}catch(e){toast(failMsg(e));return false}}
     const arr=state[col],i=arr.findIndex(x=>x.id===id);obj.id=id;if(i>=0)arr[i]=obj;else arr.push(obj);soon();return true},
   add(col,obj){return api.set(col,obj.id||uid(),obj)},
-  async update(col,id,patch){
+  async update(col,id,patch){dirtyAt=0;
     if(db){try{await db.collection(col).doc(id).update(patch);return true}catch(e){toast(failMsg(e));return false}}
     const o=state[col].find(x=>x.id===id);if(o)Object.assign(o,patch);soon();return true},
-  async del(col,id){if(db){try{await db.collection(col).doc(id).delete();return true}catch(e){toast(failMsg(e));return false}}
+  async del(col,id){dirtyAt=0;if(db){try{await db.collection(col).doc(id).delete();return true}catch(e){toast(failMsg(e));return false}}
     state[col]=state[col].filter(x=>x.id!==id);soon();return true},
   async setConfig(c){if(db){try{await db.doc("config/v3").set(c);return true}catch(e){toast(failMsg(e));return false}}state.config=c;soon();return true}
 };
@@ -680,13 +680,16 @@ function deepMerge(a,b){const o=Object.assign({},a||{});Object.keys(b||{}).forEa
 function sbErr(e){const m=(e&&e.message)||"";return{code:(e&&e.code==="42501")||/row-level security|permission|Somente a coach/i.test(m)?"invalid_argument":"unavailable",message:m}}
 function makeSbDb(client){
   const listeners={},timers={};let chan=null;
-  async function fetchCol(c){const{data,error}=await client.from("docs").select("id,data").eq("col",c);if(error)throw error;return data||[]}
-  async function refresh(c){const fns=listeners[c];if(!fns||!fns.size)return;try{const rows=await fetchCol(c);fns.forEach(f=>f(rows))}catch(e){}}
+  const last={},cache={};
+  async function fetchCol(c){const{data,error}=await client.from("docs").select("id,data").eq("col",c);if(error)throw error;return(data||[]).slice().sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0)}
+  async function refresh(c){const fns=listeners[c];if(!fns||!fns.size)return;let rows;try{rows=await fetchCol(c)}catch(e){return}
+    const sig=JSON.stringify(rows);if(sig===last[c])return;last[c]=sig;cache[c]=rows;fns.forEach(f=>f(rows))}
+  function firstLoad(c,f,tries){fetchCol(c).then(rows=>{last[c]=JSON.stringify(rows);cache[c]=rows;f(rows)}).catch(()=>setTimeout(()=>firstLoad(c,f,(tries||0)+1),Math.min(15000,1500*((tries||0)+1))))}
   const bump=c=>{clearTimeout(timers[c]);timers[c]=setTimeout(()=>refresh(c),150)};
   function ensureChan(){if(chan)return;try{chan=client.channel("tg-docs").on("postgres_changes",{event:"*",schema:"public",table:"docs"},p=>{const c=(p&&p.new&&p.new.col)||(p&&p.old&&p.old.col);if(c)bump(c);else Object.keys(listeners).forEach(bump)}).subscribe()}catch(e){}}
   setInterval(()=>{if(document.visibilityState!=="hidden")Object.keys(listeners).forEach(refresh)},30000);
   document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")Object.keys(listeners).forEach(bump)});
-  const listen=(c,f)=>{ensureChan();(listeners[c]=listeners[c]||new Set()).add(f);fetchCol(c).then(f).catch(()=>f([]));return()=>listeners[c].delete(f)};
+  const listen=(c,f)=>{ensureChan();(listeners[c]=listeners[c]||new Set()).add(f);if(cache[c])setTimeout(()=>f(cache[c]),0);else firstLoad(c,f);return()=>listeners[c].delete(f)};
   function docRef(c,id){return{id,path:c+"/"+id,
     async get(){const{data,error}=await client.from("docs").select("data").eq("col",c).eq("id",id).maybeSingle();if(error)throw sbErr(error);return{id,exists:!!data,data:()=>data?data.data:undefined}},
     async set(o){const{error}=await client.from("docs").upsert({col:c,id,data:o});if(error)throw sbErr(error);bump(c)},
@@ -776,7 +779,7 @@ function mudanca(e,pdia){if(!pdia)return null;const o=(pdia.exs||[]).find(x=>e.t
 let sess=LS.get("tg_sess3",null),view="mural",tries=0,lockUntil=0;
 function me(){if(useSB){if(!authU)return null;if(authU.admin)return"coach";const p=pById(authU.id);return p&&!p.arquivado?p.id:null}if(!sess)return null;if(sess.t==="coach")return sess.h===cfg().coachHash?"coach":null;const p=pById(sess.id);return p&&!p.arquivado&&p.senhaHash===sess.h?p.id:null}
 const isCoach=()=>me()==="coach";
-function go(v){const m=me();if(v==="eu"&&(!m||m==="coach"))v="mural";if(v==="painel"&&m!=="coach")v="mural";view=v;closeSheet();window.scrollTo(0,0);renderAll(true)}
+function go(v){dirtyAt=0;const m=me();if(v==="eu"&&(!m||m==="coach"))v="mural";if(v==="painel"&&m!=="coach")v="mural";view=v;closeSheet();window.scrollTo(0,0);renderAll(true)}
 $$("[data-go]").forEach(b=>b.onclick=()=>go(b.dataset.go));
 $("#brand").onclick=()=>go("mural");
 $("#nav-sair").onclick=()=>{if(useSB){sbLogout("");return}sess=null;LS.del("tg_sess3");if(contatosSub){contatosSub();contatosSub=null}if(anamSub){anamSub();anamSub=null}state.contatos=[];state.anamnese=[];view="mural";$("#lg-pass").value="";renderAll(true)};
@@ -798,16 +801,21 @@ $("#gate-form").addEventListener("submit",async e=>{e.preventDefault();const msg
 
 /* ===== render ===== */
 let edOpen=false;
+/* formulário com algo digitado e ainda não salvo: atualizações automáticas não redesenham a tela */
+let dirtyAt=0;
+const formDirty=()=>dirtyAt&&Date.now()-dirtyAt<15*60*1000;
+document.addEventListener("input",e=>{const t=e.target;if(t&&t.closest&&t.closest("section[id^=view-]")&&!/^(checkbox|radio)$/.test(t.type||""))dirtyAt=Date.now()},true);
+document.addEventListener("submit",()=>{dirtyAt=0},true);
 function renderAll(force){
   if(!ready()){showOnly("load");return}
   const m=me();
   if(!m&&useSB&&authU){const pp=pById(authU.id);sbLogout(pp&&pp.arquivado?"Seu acesso está pausado. Fale com a Gi.":"Seu cadastro não foi encontrado. Fale com a Gi.");return}
-  if(!m){if(sess){sess=null;LS.del("tg_sess3")}showOnly("gate");$("#cfg-warn").hidden=!((TGC||window.supabase)&&state.mode==="local");$("#foot").textContent="Time da Gi · zooei! × Coach Gi · versão 8";return}
+  if(!m){if(sess){sess=null;LS.del("tg_sess3")}showOnly("gate");$("#cfg-warn").hidden=!((TGC||window.supabase)&&state.mode==="local");$("#foot").textContent="Time da Gi · zooei! × Coach Gi · versão 9";return}
   if(m==="coach"){watchContatos();watchAnamnese()}
   if(view==="eu"&&m==="coach")view="painel";
   if(view==="painel"&&m!=="coach")view="mural";
   showOnly(view);
-  const ae=document.activeElement,typing=ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)&&!!ae.closest("section");
+  const ae=document.activeElement,typing=(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)&&!!ae.closest("section"))||(!force&&formDirty());
   const sheetOpen=!!$("#sheet-root").innerHTML;
   if(force||!typing){
     if(view==="mural")renderMural();

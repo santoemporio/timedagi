@@ -20,7 +20,7 @@ async function handle(o){
     case'signup':{return{error:{message:'Email address "'+o.email+'" is invalid'}};const ex=await db.query("select 1 from auth.users where email=$1",[o.email.toLowerCase()]);if(ex.rows.length)return{error:{message:'User already registered'}};
       if(o.password.length<6)return{error:{message:'Password should be at least 6 characters'}};const r=await db.query("insert into auth.users(email,encrypted_password) values(lower($1),extensions.crypt($2,'x')) returning id,email",[o.email,o.password]);return{data:{user:Object.assign(r.rows[0],{identities:[{}]})}}}
     case'setpw':{if(!o.uid)return{error:{message:'not logged'}};await db.query("update auth.users set encrypted_password=extensions.crypt($1,'x') where id=$2",[o.password,o.uid]);return{data:{}}}
-    case'select':return asUser(o.uid,`select id,data from public.docs where col=${lit(o.col)}${o.id!=null?' and id='+lit(o.id):''}`);
+    case'select':if(globalThis.FAIL_SEL)return{error:{message:'Failed to fetch'}};return asUser(o.uid,`select id,data from public.docs where col=${lit(o.col)}${o.id!=null?' and id='+lit(o.id):''}`);
     case'upsert':return asUser(o.uid,`insert into public.docs(col,id,data) values(${lit(o.col)},${lit(o.id)},${lit(JSON.stringify(o.data))}::jsonb) on conflict(col,id) do update set data=excluded.data`);
     case'update':return asUser(o.uid,`update public.docs set data=${lit(JSON.stringify(o.data))}::jsonb where col=${lit(o.col)} and id=${lit(o.id)} returning id`);
     case'delete':return asUser(o.uid,`delete from public.docs where col=${lit(o.col)} and id=${lit(o.id)} returning id`);
@@ -136,6 +136,21 @@ try{
   await logout();await login('aninha','1234');await page.waitForSelector('#view-eu:not([hidden])',{timeout:8000});ok('Aluna de teste entra com aninha / 1234',true);
   await page.screenshot({path:'../sb-aluno.png'});
   await page.reload();await page.waitForSelector('#view-eu:not([hidden])',{timeout:8000});ok('Login continua depois de recarregar a página',true);
+  // --- tela não se redesenha sozinha ---
+  await page.click('[data-go="mural"]');await page.waitForSelector('#view-mural:not([hidden])');await page.waitForTimeout(400);
+  const poke=()=>page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));
+  await page.evaluate(()=>{window.__n=document.querySelector('#turma').firstElementChild});
+  await poke();await page.waitForTimeout(800);
+  ok('Atualização automática sem novidade não redesenha a tela',await page.evaluate(()=>document.querySelector('#turma').firstElementChild===window.__n));
+  globalThis.FAIL_SEL=true;await poke();await page.waitForTimeout(800);globalThis.FAIL_SEL=false;
+  ok('Falha momentânea de conexão não desloga nem recarrega',await page.isVisible('#view-mural')&&await page.evaluate(()=>document.querySelector('#turma').firstElementChild===window.__n));
+  await page.evaluate(()=>{const i=document.createElement('input');i.id='tst-in';document.querySelector('#feed').prepend(i)});
+  await page.fill('#tst-in','meu texto');await page.evaluate(()=>document.activeElement.blur());
+  await db.query("insert into public.docs(col,id,data) values('posts','p_novo',$1)",[JSON.stringify({texto:'Recado novo da coach',ts:new Date().toISOString(),fixado:false})]);
+  await poke();await page.waitForTimeout(900);
+  ok('Formulário com texto não salvo não é apagado por novidade no banco',await page.evaluate(()=>{const i=document.querySelector('#tst-in');return!!i&&i.value==='meu texto'}));
+  await page.click('[data-go="coach"]');await page.click('[data-go="mural"]');await page.waitForTimeout(400);
+  ok('Ao navegar, a novidade aparece',(await page.textContent('#feed')).includes('Recado novo da coach'));
 }catch(e){R.push('CRASH '+e.message.split('\n')[0])}
 ok('Sem erros de JavaScript',errs.length===0,errs.slice(0,3).join(' | '));
 console.log(R.join('\n'));console.log(R.filter(x=>x.startsWith('PASS')).length+'/'+R.length+' passaram');
