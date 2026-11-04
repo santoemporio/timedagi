@@ -2,7 +2,7 @@
 
 - Código-fonte único: `src/time-da-gi.html` (HTML + CSS + JS vanilla).
 - Gerar o site: `cd src && python3 build.py` → escreve em `site/` (não sobrescreve `site/config.js`).
-- Publicação: push na branch `main` → Cloudflare (Worker com assets, conta pablosansouza) publica sozinho a pasta `site`. URL: https://timedagi.pablosansouza.workers.dev (o antigo timedagi.pages.dev não existe mais)
+- Publicação: push na branch `main` → Cloudflare (Worker com assets, conta pablosansouza) publica sozinho a pasta `site`. URL oficial: https://timedagi.pages.dev (projeto Pages ligado ao GitHub). Também existe o Worker timedagi.pablosansouza.workers.dev publicando o mesmo conteúdo. Endereço oficial dos links fica em site/config.js (appUrl).
 - Banco: Supabase, projeto `cgrmsfmkpsuvfkgmgdfc` (org ZOOEI!). Mudanças de banco via conector Supabase (apply_migration) e também registradas em `db/instalar.sql` (idempotente). Ao mudar a versão do banco, atualize `tg_versao()` e a checagem `authU.dbv<8` no app.
 - O conector Supabase só enxerga uma organização por vez (ZOOEI! = Time da Gi; ALRA MARKETING = sistema da Alra).
 - Testes: `tests/` (Playwright + PGlite 0.2.17). Rode antes de publicar.
