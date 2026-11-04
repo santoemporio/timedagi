@@ -790,7 +790,7 @@ function renderAll(force){
   if(!ready()){showOnly("load");return}
   const m=me();
   if(!m&&useSB&&authU){const pp=pById(authU.id);sbLogout(pp&&pp.arquivado?"Seu acesso está pausado. Fale com a Gi.":"Seu cadastro não foi encontrado. Fale com a Gi.");return}
-  if(!m){if(sess){sess=null;LS.del("tg_sess3")}showOnly("gate");$("#cfg-warn").hidden=!((TGC||window.supabase)&&state.mode==="local");$("#foot").textContent="Time da Gi · zooei! × Coach Gi · versão 9";return}
+  if(!m){if(sess){sess=null;LS.del("tg_sess3")}showOnly("gate");$("#cfg-warn").hidden=!((TGC||window.supabase)&&state.mode==="local");$("#foot").textContent="Time da Gi · zooei! × Coach Gi · versão 10";return}
   if(m==="coach"){watchContatos();watchAnamnese()}
   if(view==="eu"&&m==="coach")view="painel";
   if(view==="painel"&&m!=="coach")view="mural";
@@ -1288,7 +1288,7 @@ const ANAM=[{t:"Dados e saúde",f:[["nome","Nome completo","text",1],["nasc","Da
 let anamSub=null;
 function watchAnamnese(){if(!db||anamSub||me()!=="coach")return;anamSub=db.collection("anamnese").onSnapshot(s=>{state.anamnese=s.docs.map(d=>Object.assign({id:d.id},d.data()));soon()},()=>{})}
 const anamDe=id=>state.anamnese.find(a=>a.id===id);
-function appUrl(){return cfg().appUrl||(useSB?location.origin+location.pathname.replace(/index\.html$/,""):"https://claude.ai/artifact/QFpXYaTzVeLGHvGNf1SR7q")}
+function appUrl(){return cfg().appUrl||(TGC&&TGC.appUrl)||(useSB?location.origin+location.pathname.replace(/index\.html$/,""):"https://claude.ai/artifact/QFpXYaTzVeLGHvGNf1SR7q")}
 function anamWaLink(p){return waLink(contato(p.id),"Oi, "+p.apelido+"! Para eu montar teus treinos do jeito certo, preciso que tu preenchas tua ficha de anamnese. Leva uns 5 minutos 💗\n\n"+appUrl()+"#anamnese\n\nEntra com teu usuário *"+p.login+"* e tua senha.")}
 function anamBox(p){const a=anamDe(p.id);const feita=a&&a.preenchidoEm;const st=feita?"Preenchida em "+fd(a.preenchidoEm):p.anamneseOk?"Enviada pelo aluno em "+fd(p.anamneseOk):p.anamnesePedida?"Pedida em "+fd(p.anamnesePedida):"Não enviada";
   const l=anamWaLink(p);
