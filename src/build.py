@@ -1,6 +1,6 @@
 import shutil,os,re
 from PIL import Image
-D='dist'
+D='../site'
 src=open('time-da-gi.html').read()
 i=src.index('</style>')+len('</style>')
 headpart,body=src[:i],src[i:]
