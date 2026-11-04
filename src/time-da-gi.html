@@ -114,6 +114,18 @@ a.btn{text-decoration:none}
 .pill.ok{background:#DDF6EC;color:var(--ok)}
 .pill.risk{background:#FDE7E8;color:var(--risk)}
 .pill.warn{background:#FFF1D6;color:#9A5B00}
+.fin-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.fin-stats .stat b{font-size:20px}.stat.risk{background:#FDE7E8}.stat.risk b{color:var(--risk)}
+.fin-chart{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;height:150px;align-items:end;padding-top:8px}
+.fc-col{display:grid;grid-template-rows:1fr auto;height:100%;gap:4px;text-align:center;font-size:11px;color:var(--muted);text-transform:capitalize}
+.fc-bars{display:flex;gap:3px;align-items:end;justify-content:center;height:100%}
+.fc-bars i{display:block;width:14px;border-radius:5px 5px 2px 2px;min-height:2px}
+.fc-bars .prev,.fc-key.prev{background:var(--sky);border:1px solid #BFD8FF}.fc-bars .rec,.fc-key.rec{background:var(--pink)}
+.fc-key{display:inline-block;width:10px;height:10px;border-radius:3px;vertical-align:middle;margin:0 4px 0 10px}
+.row-p.risk{border-color:var(--risk);background:#FFF7F7}
+.fin-al{display:flex;justify-content:space-between;align-items:center;gap:12px;border:1px dashed var(--line);border-radius:16px;padding:12px 14px}
+.fin-al b{display:block;font-size:15px;margin-top:2px}.fin-al small{color:var(--muted);font-size:12px}.fin-al small.risk{color:var(--risk)}
+.fin-nudge{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#FFF4FA;border-radius:14px;padding:10px 14px;font-size:13px;margin-top:6px}
 
 /* Feed */
 .feed{display:grid;gap:10px}
@@ -551,12 +563,14 @@ button.cal-c:hover{border-color:var(--pink)}
     </div>
     <button class="btn line sm" id="al-senha">Trocar senha</button>
   </div>
+  <div class="wrap" id="al-nudge"></div>
   <div class="wrap al-grid">
     <div style="display:grid;gap:16px">
       <div class="card" id="al-obj"></div>
       <div class="card" id="al-const"></div>
       <div class="card" id="al-prog"></div>
       <div class="card" id="al-hist"></div>
+      <div id="al-fin"></div>
     </div>
     <div class="card plan" id="al-plan"></div>
   </div>
@@ -571,6 +585,7 @@ button.cal-c:hover{border-color:var(--pink)}
       <button class="tab" data-tab="hoje">Hoje</button>
       <button class="tab" data-tab="treinos">Planilhas</button>
       <button class="tab" data-tab="alunos">Alunos</button>
+      <button class="tab" data-tab="fin">Financeiro</button>
       <button class="tab" data-tab="perfil">Meu perfil</button>
       <button class="tab" data-tab="ajustes">Ajustes</button>
     </div>
@@ -631,7 +646,7 @@ const DEF={v:3,coachLogin:"coachgi",coachHash:passHash("0123","coachgi"),fraseDi
 
 /* ===== estado e banco ===== */
 const COLS=["perfis","planos","checkins","posts","comentarios","curtidas"];
-const state={mode:"boot",config:null,contatos:[],anamnese:[],loaded:new Set()};COLS.forEach(c=>state[c]=[]);
+const state={mode:"boot",config:null,contatos:[],anamnese:[],fin:[],pagamentos:[],loaded:new Set()};COLS.forEach(c=>state[c]=[]);
 let db=null,contatosSub=null;
 const cfg=()=>state.config||DEF;
 function failMsg(e){if(e&&e.code==="quota_exceeded")return"O banco desta página está cheio.";if(e&&e.code==="invalid_argument")return"Seu acesso a esta página não permite salvar isso. Peça acesso de edição.";return"Não foi possível salvar. Tente de novo."}
@@ -790,8 +805,8 @@ function renderAll(force){
   if(!ready()){showOnly("load");return}
   const m=me();
   if(!m&&useSB&&authU){const pp=pById(authU.id);sbLogout(pp&&pp.arquivado?"Seu acesso está pausado. Fale com a Gi.":"Seu cadastro não foi encontrado. Fale com a Gi.");return}
-  if(!m){if(sess){sess=null;LS.del("tg_sess3")}showOnly("gate");$("#cfg-warn").hidden=!((TGC||window.supabase)&&state.mode==="local");$("#foot").textContent="Time da Gi · zooei! × Coach Gi · versão 10";return}
-  if(m==="coach"){watchContatos();watchAnamnese()}
+  if(!m){if(sess){sess=null;LS.del("tg_sess3")}showOnly("gate");$("#cfg-warn").hidden=!((TGC||window.supabase)&&state.mode==="local");$("#foot").textContent="Time da Gi · zooei! × Coach Gi · versão 11";return}
+  watchFin();if(m==="coach"){watchContatos();watchAnamnese()}
   if(view==="eu"&&m==="coach")view="painel";
   if(view==="painel"&&m!=="coach")view="mural";
   showOnly(view);
@@ -814,7 +829,7 @@ function showOnly(v){["load","gate","mural","coach","eu","painel"].forEach(x=>{$
 
 function renderMural(){
   const b=$("#banner-slot");
-  b.innerHTML=state.mode==="local"?'<div class="banner'+(TGC?' cfg-warn':'')+'"><span><strong>Modo local.</strong> '+(TGC?"Falta configurar o Supabase no arquivo config.js.":"O banco não está disponível nesta visualização.")+' Dá para navegar, mas nada fica salvo.</span></div>':(useSB&&authU&&authU.admin&&authU.dbv<8?'<div class="banner cfg-warn" id="db-old"><span><strong>Banco desatualizado.</strong> Rode o arquivo instalar.sql no Supabase (SQL Editor &gt; Run). Até lá, cadastrar alunos não funciona.</span></div>':"");
+  b.innerHTML=state.mode==="local"?'<div class="banner'+(TGC?' cfg-warn':'')+'"><span><strong>Modo local.</strong> '+(TGC?"Falta configurar o Supabase no arquivo config.js.":"O banco não está disponível nesta visualização.")+' Dá para navegar, mas nada fica salvo.</span></div>':(useSB&&authU&&authU.admin&&authU.dbv<9?'<div class="banner cfg-warn" id="db-old"><span><strong>Banco desatualizado.</strong> Rode o arquivo instalar.sql no Supabase (SQL Editor &gt; Run). Até lá, cadastrar alunos não funciona.</span></div>':"");
   $("#coach-strip").innerHTML=avi("coach",72)+'<div style="min-width:0;position:relative;z-index:1"><span class="eyebrow">Frase do dia</span><q>'+esc(fraseDoDia())+'</q><div class="who">Coach Gi · '+esc(cfg().coach.cref||"")+'</div></div><span class="go">Conheça sua coach →</span>';
   $("#coach-strip").onclick=()=>go("coach");
   const al=ativos();
@@ -892,6 +907,7 @@ function coachAlunoSheet(id){const p=pById(id);if(!p)return;const q=quinzena(id)
    +waBlock(p)
    +'<div class="stats"><div class="stat"><b class="num">'+(q?q.ciclo:"—")+'</b><span>quinzena</span></div><div class="stat"><b class="num">'+s+"/"+2*freqDe(p)+'</b><span>treinos nesta quinzena</span></div><div class="stat"><b class="num">'+(cm==null?"—":cm+"%")+'</b><span>constância média</span></div></div>'
    +'<div><span class="lbl">Objetivo</span><p style="font-weight:600;margin-top:4px">'+esc(p.objetivo||p.objetivoMural||"—")+'</p>'+((p.metas||[]).length?'<ul class="metas" style="margin-top:6px">'+p.metas.map(x=>'<li>'+esc(x)+'</li>').join("")+'</ul>':"")+'</div>'
+   +(()=>{const s=finStatus(p.id);return'<div class="acts-row" style="justify-content:space-between;border:1px solid var(--line);border-radius:14px;padding:10px 12px"><span><span class="lbl">Financeiro</span><br><b>'+esc(planoNome(s.f))+'</b> <span class="pill '+s.pill+'">'+esc(s.lbl)+'</span></span><button class="btn line sm" data-finopen="'+esc(p.id)+'">Abrir</button></div>'})()
    +anamBox(p)
    +(ult.length?'<div class="mini-list">'+ult.map(k=>{const h=HUMOR.find(x=>x[0]===Number(k.humor));return'<div><span>Treino '+esc(k.letra)+' · '+(h?h[1]:"")+" esforço "+esc(k.rpe)+'/10</span><span class="muted">'+esc(rel(k.ts))+'</span></div>'}).join("")+'</div>':'<p class="muted small">Nenhum treino registrado ainda.</p>')
    +'<div class="acts-row"><button class="btn blue sm" data-planilha="'+esc(id)+'">Planilha</button><button class="btn line sm" data-editaluno="'+esc(id)+'">Editar cadastro</button></div>',p.nome);
@@ -950,6 +966,8 @@ function renderEu(){
   const hs=ckDo(p.id).slice(0,6);
   $("#al-hist").innerHTML='<h2>Seus treinos</h2>'+(hs.length?'<div class="hist">'+hs.map(k=>{const pl=planoById(k.planoId),dia=pl&&diasDe(pl).find(d=>d.id===k.diaId),h=HUMOR.find(x=>x[0]===Number(k.humor));const reps=state.comentarios.filter(c=>c.alvo==="checkin:"+k.id&&c.autor==="coach");
     return'<div class="hist-item"><div class="top-l"><strong>Treino '+esc(k.letra)+(dia?" · "+esc(dia.titulo):"")+'</strong><span class="muted">'+esc(rel(k.ts))+'</span></div><span class="muted">'+(h?h[1]+" "+h[2]+" · ":"")+"esforço "+esc(k.rpe)+'/10</span>'+reps.map(r=>'<div class="reply"><b>Gi'+(r.privado?" (só pra você)":"")+':</b> '+esc(r.texto)+'</div>').join("")+'</div>'}).join("")+'</div>':'<p class="muted small">Seu histórico aparece aqui depois do primeiro treino.</p>');
+  $("#al-fin").innerHTML=finAluno(p);$("#al-nudge").innerHTML=finAvisoAluno(p);
+  [$("#fin-al-go"),$("#fin-nudge-go")].forEach(b=>{if(b)b.onclick=()=>finAlunoSheet(p)});
   const P=$("#al-plan");euLocked=true;
   const anamCta=p.anamnesePedida&&!p.anamneseOk?'<div class="anam-cta"><div><b>A Gi pediu tua ficha de anamnese</b><span>São duas etapas rápidas. Só ela vê as respostas.</span></div><button class="btn sm" id="anam-go">Preencher agora</button></div>':"";
   const bindCta=()=>{const b=$("#anam-go");if(b)b.onclick=()=>anamForm(p,"aluno")};
@@ -1034,6 +1052,7 @@ function renderPainel(){
   if(ptab==="hoje"){P.innerHTML=pHoje();bindHoje()}
   if(ptab==="treinos"){P.innerHTML=pTreinos();bindTreinos()}
   if(ptab==="alunos"){P.innerHTML=pAlunos();bindAlunos()}
+  if(ptab==="fin"){P.innerHTML=pFin();bindFin()}
   if(ptab==="perfil"){P.innerHTML=pPerfil();bindPerfil()}
   if(ptab==="ajustes"){P.innerHTML=pAjustes();bindAjustes()}
 }
@@ -1156,6 +1175,7 @@ function pAlunos(){const e=editAluno?pById(editAluno):null;const mes=dkey(new Da
    +'<div class="field full"><span class="lbl">Dias de treino</span><div class="wd-pick" id="fa-wd" role="group" aria-label="Dias de treino">'+WD_ORDER.map(d=>{const on=sem.includes(d);return'<button type="button" data-wd="'+d+'" class="'+(on?"on":"")+'" aria-pressed="'+on+'">'+WD[d]+'</button>'}).join("")+'</div><small class="muted" id="fa-wdn">'+(sem.length?sem.length+" treinos por semana":"Toque nos dias em que o aluno vai treinar")+'</small></div>'
    +'<div class="field"><label for="fa-wa">WhatsApp com DDD (só você vê)</label><input class="input num" id="fa-wa" inputmode="tel" maxlength="16" value="'+esc(e?waFmt(contato(e.id)):"")+'" placeholder="(51) 99999-9999"></div>'
    +'<div class="field"><label for="fa-tu">Turma (mês de entrada)</label><input class="input" id="fa-tu" type="month" value="'+esc(e?e.turma:mes)+'"></div>'
+   +(()=>{const f=e?finDe(e.id):null;return'<div class="field"><label for="fa-pl">Plano</label><select class="input" id="fa-pl"><option value="">Definir depois</option>'+Object.entries(PLANOS).map(([k,P])=>'<option value="'+k+'"'+(f&&f.plano===k?" selected":"")+'>'+P.n+(P.v!=null?" · "+brl(P.v):"")+'</option>').join("")+'</select></div><div class="field" id="fa-vw"'+(f&&f.plano==="personalizado"?"":" hidden")+'><label for="fa-v">Valor personalizado (R$)</label><input class="input num" id="fa-v" inputmode="decimal" value="'+esc(f&&f.valor!=null?String(f.valor).replace(".",","):"")+'" placeholder="140,00"></div>'})()
    +'<div class="field full"><label for="fa-om">Objetivo no mural (curto, todos veem)</label><input class="input" id="fa-om" maxlength="40" value="'+esc(e?e.objetivoMural:"")+'" placeholder="Primeira barra fixa"></div>'
    +'<div class="field full"><label for="fa-ob">Objetivo completo (só o aluno e você veem)</label><textarea class="input" id="fa-ob" rows="2" maxlength="240">'+esc(e?e.objetivo:"")+'</textarea></div>'
    +'<div class="field full"><label for="fa-me">Metas (uma por linha)</label><textarea class="input" id="fa-me" rows="3">'+esc(e?(e.metas||[]).join("\n"):"")+'</textarea></div>'
@@ -1179,7 +1199,9 @@ function bindAlunos(){
   ap.addEventListener("input",()=>{auto=!ap.value||ap.value===nm.value});
   const wdn=()=>{const n=$$("#fa-wd .on").length;$("#fa-wdn").textContent=n?n+(n===1?" treino":" treinos")+" por semana":"Toque nos dias em que o aluno vai treinar"};
   $$("#fa-wd [data-wd]").forEach(b=>b.onclick=()=>{const on=!b.classList.contains("on");b.classList.toggle("on",on);b.setAttribute("aria-pressed",on);wdn()});
+  const fpl=$("#fa-pl");if(fpl)fpl.onchange=()=>{$("#fa-vw").hidden=fpl.value!=="personalizado"};
   $("#fa").onsubmit=async ev=>{ev.preventDefault();const e=editAluno?pById(editAluno):null;const m=$("#fa-msg");m.textContent="";
+    const plSel=$("#fa-pl").value;let plVal=null;if(plSel==="personalizado"){plVal=Number(String($("#fa-v").value).replace(/\./g,"").replace(",","."));if(!(plVal>=0)||$("#fa-v").value.trim()===""){m.textContent="Informe o valor do plano personalizado.";return}plVal=Math.round(plVal*100)/100}
     const login=norm($("#fa-lg").value),pw=$("#fa-pw").value.trim(),wa=$("#fa-wa").value.trim();
     const semana=WD_ORDER.filter(d=>$('#fa-wd [data-wd="'+d+'"]').classList.contains("on"));
     if(!/^[a-z]{3,20}$/.test(login)){m.textContent="Usuário: de 3 a 20 letras, sem espaço, número ou acento.";return}
@@ -1201,10 +1223,12 @@ function bindAlunos(){
     const old=e?contato(e.id):"";
     if(wa&&waDigits(wa)!==waDigits(old)){if(!await api.set("contatos",id,{whatsapp:waDigits(wa)}))toast("Aluno salvo, mas o WhatsApp não. Seu acesso à página precisa ser de edição.")}
     else if(!wa&&old){await api.del("contatos",id)}
+    {const f0=finDe(id);if(plSel&&finPronto()&&(!f0||f0.plano!==plSel||(plSel==="personalizado"&&f0.valor!==plVal))){const o2=Object.assign({},f0||{},{plano:plSel});if(plSel==="personalizado")o2.valor=plVal;else delete o2.valor;await api.set("fin",id,o2)}}
     toast(e?"Cadastro atualizado.":"Aluno adicionado. Usuário: "+login);editAluno=null;renderPainel()}}
 async function removerAluno(id){const ck=state.checkins.filter(k=>k.alunoId===id).map(k=>"checkin:"+k.id);const alvos=new Set(ck);
   const jobs=[];
   state.planos.filter(p=>p.alunoId===id).forEach(p=>jobs.push(["planos",p.id]));
+  state.pagamentos.filter(x=>x.alunoId===id).forEach(x=>jobs.push(["pagamentos",x.id]));if(finDe(id))jobs.push(["fin",id]);
   state.checkins.filter(k=>k.alunoId===id).forEach(k=>jobs.push(["checkins",k.id]));
   state.comentarios.filter(c=>c.autor===id||alvos.has(c.alvo)).forEach(c=>jobs.push(["comentarios",c.id]));
   state.curtidas.filter(c=>c.autor===id||alvos.has(c.alvo)).forEach(c=>jobs.push(["curtidas",c.id]));
@@ -1235,6 +1259,7 @@ function bindPerfil(){
     saveCoach(c=>{c.coach.bio=bio;c.coach.instagram=ig;c.coach.especialidades=esp;c.coach.whatsapp=waDigits(wa)},"Perfil salvo.")}}
 function pAjustes(){const nEx=state.perfis.filter(p=>p.exemplo).length;
   return'<div class="pgrid"><div style="display:grid;gap:18px"><form class="card" id="fj"><h2>Seu acesso</h2><p class="small">Usuário da coach: <b>'+esc(cfg().coachLogin)+'</b> (fixo, administradora principal).</p><div class="form-grid"><div class="field"><label for="fj-a">Senha atual</label><input class="input login-input" id="fj-a" type="password" inputmode="numeric" maxlength="6"></div><div class="field"><label for="fj-n">Nova senha (4 a 6 números)</label><input class="input login-input" id="fj-n" type="password" inputmode="numeric" maxlength="6"></div></div><p class="pin-msg err" id="fj-msg"></p><button class="btn" type="submit">Trocar senha</button></form>'
+   +'<form class="card" id="fx"><h2>Pix para cobranças</h2><p class="muted small">Vai nas mensagens de cobrança e no Pix copia e cola que o aluno vê.</p><div class="form-grid"><div class="field"><label for="fx-k">Chave Pix</label><input class="input" id="fx-k" value="'+esc(pixChave())+'"><small class="muted">Celular no formato +55DDDNÚMERO.</small></div><div class="field"><label for="fx-n">Nome do recebedor</label><input class="input" id="fx-n" maxlength="25" value="'+esc(pixNome())+'"></div><div class="field"><label for="fx-c">Cidade</label><input class="input" id="fx-c" maxlength="15" value="'+esc(pixCidade())+'"></div></div><button class="btn line" type="submit">Salvar Pix</button></form>'
    +'<form class="card" id="fu"><h2>Link do app</h2><p class="muted small">Usado nas mensagens de WhatsApp, como o pedido da ficha de anamnese.</p><div class="field"><label for="fu-url">Endereço</label><input class="input" id="fu-url" type="url" value="'+esc(appUrl())+'"></div><button class="btn line" type="submit">Salvar link</button></form></div>'
    +'<div class="card"><h2>Alunos de teste</h2><p class="small">Cria 3 alunos fictícios com dias de treino, planilha e alguns treinos, para testar o fluxo. Usuários <b>aninha</b>, <b>brunao</b> e <b>carlinha</b>, senha <b>1234</b>.</p><div class="acts-row"><button class="btn blue" id="ex-add"'+(nEx?" disabled":"")+'>Criar alunos de teste</button><button class="btn line" id="ex-rm"'+(nEx?"":" disabled")+'>Apagar alunos de teste ('+nEx+')</button></div></div></div>'}
 function bindAjustes(){
@@ -1247,6 +1272,7 @@ function bindAjustes(){
     if(!/^\d{4,6}$/.test(n)){m.textContent="A nova senha precisa ter de 4 a 6 números.";return}
     c.coachHash=passHash(n,c.coachLogin);$("#fj").querySelectorAll("input").forEach(x=>x.blur());
     if(await api.setConfig(c)){sess={t:"coach",h:c.coachHash};LS.set("tg_sess3",sess);m.textContent="";toast("Senha da coach alterada.")}};
+  $("#fx").onsubmit=e=>{e.preventDefault();let k=$("#fx-k").value.trim();const d=k.replace(/\D/g,"");if(/^\d{10,11}$/.test(d)&&!/[@a-z]/i.test(k))k="+55"+d;else if(/^55\d{10,11}$/.test(d)&&!/[@a-z]/i.test(k))k="+"+d;if(!k){toast("Informe a chave Pix.");return}$("#fx").querySelectorAll("input").forEach(x=>x.blur());saveCoach(c=>{c.pixChave=k;c.pixNome=$("#fx-n").value.trim();c.pixCidade=$("#fx-c").value.trim()},"Pix salvo.")};
   $("#fu").onsubmit=e=>{e.preventDefault();const v=$("#fu-url").value.trim();$("#fu-url").blur();if(!/^https:\/\//.test(v)){toast("Use um endereço que comece com https://");return}saveCoach(c=>{c.appUrl=v},"Link salvo.")};
   $("#ex-add").onclick=async()=>{$("#ex-add").disabled=true;toast("Criando alunos de teste…");await criarExemplos();toast("Alunos de teste criados.");renderPainel()};
   $("#ex-rm").onclick=async()=>{$("#ex-rm").disabled=true;for(const p of state.perfis.filter(p=>p.exemplo))await removerAluno(p.id);toast("Alunos de teste apagados.");renderPainel()};
@@ -1280,6 +1306,179 @@ async function criarExemplos(){
 }
 
 
+
+/* ===== financeiro ===== */
+const PLANOS={fundador:{n:"Fundador",v:120},atleta:{n:"Atleta",v:160},isento:{n:"Isento",v:0},personalizado:{n:"Personalizado",v:null}};
+const FORMAS=["Pix","Dinheiro","Cartão","Transferência"];
+const brl=v=>(Number(v)||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const dDiff=(a,b)=>Math.round((pd(b)-pd(a))/864e5);
+const pixChave=()=>cfg().pixChave||"+5551997770125";
+const pixChaveTxt=()=>{const k=pixChave();const d=k.replace(/\D/g,"");return /^\+55\d{10,11}$/.test(k)?d.slice(2):k};
+const pixNome=()=>cfg().pixNome||(cfg().coach&&cfg().coach.nome)||"COACH GI";
+const pixCidade=()=>cfg().pixCidade||"BRASIL";
+function crc16(s){let c=0xFFFF;for(let i=0;i<s.length;i++){c^=s.charCodeAt(i)<<8;for(let j=0;j<8;j++)c=(c&0x8000)?((c<<1)^0x1021)&0xFFFF:(c<<1)&0xFFFF}return c.toString(16).toUpperCase().padStart(4,"0")}
+const pixClean=(s,n)=>String(s).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Za-z0-9 ]/g,"").toUpperCase().trim().slice(0,n)||"X";
+function pixPayload(valor,txid){const f=(id,v)=>id+String(v.length).padStart(2,"0")+v;
+  const mai=f("00","br.gov.bcb.pix")+f("01",pixChave());
+  let p=f("00","01")+f("26",mai)+f("52","0000")+f("53","986")+(valor>0?f("54",Number(valor).toFixed(2)):"")+f("58","BR")+f("59",pixClean(pixNome(),25))+f("60",pixClean(pixCidade(),15))+f("62",f("05",pixClean(txid||"***",25).replace(/ /g,"")||"***"));
+  p+="6304";return p+crc16(p)}
+const finDe=id=>state.fin.find(f=>f.id===id)||null;
+const pagsDe=id=>state.pagamentos.filter(x=>x.alunoId===id).sort((a,b)=>(a.ciclo-b.ciclo)||String(a.data).localeCompare(b.data));
+function valorPlano(f){if(!f||!PLANOS[f.plano])return null;return f.plano==="personalizado"?Math.max(0,Number(f.valor)||0):PLANOS[f.plano].v}
+const planoNome=f=>f&&PLANOS[f.plano]?PLANOS[f.plano].n:"Sem plano";
+/* Ciclo 0 = primeiro mês (pago antes da liberação). A partir da liberação (L), cada ciclo k vence em L + 30·k. */
+function finStatus(id,hoje){hoje=hoje||dkey(new Date());const f=finDe(id);const pg=pagsDe(id);
+  if(!f||!PLANOS[f.plano])return{k:"sem",lbl:"Sem plano",pill:"sky",f,pg,v:null};
+  const v=valorPlano(f);
+  if(v===0)return{k:"isento",lbl:"Isento",pill:"sky",f,pg,v};
+  const pagos=new Set(pg.map(x=>x.ciclo));
+  if(!pagos.has(0))return{k:"aguarda",lbl:"Aguardando 1º pagamento",pill:"warn",f,pg,v,ciclo:0};
+  if(!f.liberadoEm){const p0=pg.find(x=>x.ciclo===0);const prazo=addDays(p0.data,7);return{k:"liberar",lbl:"Pago · liberar planilha",pill:"blue",f,pg,v,prazo,dias:dDiff(hoje,prazo)}}
+  let n=0;while(pagos.has(n))n++;
+  const venc=addDays(f.liberadoEm,30*n),dd=dDiff(hoje,venc);
+  const base={f,pg,v,ciclo:n,venc,dd};
+  if(dd>3)return Object.assign(base,{k:"emdia",lbl:"Em dia até "+fd(venc),pill:"ok"});
+  if(dd>0)return Object.assign(base,{k:"vence",lbl:"Vence em "+dd+(dd===1?" dia":" dias"),pill:"warn",etapa:"d3"});
+  if(dd===0)return Object.assign(base,{k:"hoje",lbl:"Vence hoje",pill:"warn",etapa:"d0"});
+  const atraso=-dd,abertos=Math.floor(atraso/30)+1;
+  return Object.assign(base,{k:"atraso",lbl:"Atrasado há "+atraso+(atraso===1?" dia":" dias"),pill:"risk",atraso,devido:v*abertos,etapa:atraso>=10?"a10":atraso>=3?"a3":null})}
+const ETAPAS={d3:"Lembrete (3 dias antes)",d0:"Dia do vencimento",a3:"Atraso: 3 dias",a10:"Atraso: 10 dias"};
+function avisado(f,ciclo,etapa){return!!(f&&f.avisos&&(f.avisos["c"+ciclo]||[]).includes(etapa))}
+/* ---------- mensagens ---------- */
+function pixBloco(v,id,ciclo){return"\n\nPix (celular): *"+pixChaveTxt()+"*\nOu Pix copia e cola:\n"+pixPayload(v,"TG"+String(id).slice(0,8)+"C"+ciclo)}
+function msgBoasVindas(p){const f=finDe(p.id),v=valorPlano(f),a=anamDe(p.id),d=(a&&a.d)||{};
+  const obj=(d.objetivo||p.objetivo||p.objetivoMural||"").trim().replace(/[.!]+$/,"");
+  const partes=[];
+  if(obj)partes.push("teu objetivo é *"+obj.charAt(0).toLowerCase()+obj.slice(1)+"*");
+  if(d.treina==="Sim"&&d.treinaQue)partes.push("que já treinas "+d.treinaQue.trim()+(d.treinaVezes?" ("+d.treinaVezes.trim()+")":""));
+  if(d.local)partes.push("que vais treinar "+(/^(em|na|no|de|com)\b/i.test(d.local.trim())?"":"em ")+d.local.trim());
+  let t="Oi, "+p.apelido+"! Recebi tua ficha, obrigada por preencher com tanto cuidado 💗\n\n";
+  if(partes.length)t+="Vi que "+(partes.length>1?partes.slice(0,-1).join(", ")+" e "+partes[partes.length-1]:partes[0])+".";
+  if(d.dores&&d.dores.trim()&&!/^(n[ãa]o|nenhum|nada)\b/i.test(d.dores.trim()))t+=" Também anotei o que contaste sobre dores e restrições, e vou levar isso em conta em cada exercício.";
+  t+="\n\nAgora vou montar a tua planilha do zero, pensada para ti. ";
+  if(!v){t+="Em até *7 dias* ela fica liberada no app e eu te aviso por aqui. Bora! 🚀";return t}
+  t+="Ela fica liberada no app em até *7 dias* depois da confirmação do pagamento do primeiro mês.\n\nTeu plano: *"+planoNome(f)+"* · "+brl(v)+" a cada 30 dias. O ciclo começa a contar no dia em que a planilha for liberada."+pixBloco(v,p.id,0)+"\n\nAssim que pagares, me manda o *comprovante* aqui que eu já começo a montar! 🚀";return t}
+function msgEtapa(p,s){const v=s.v,pl=planoNome(s.f);
+  if(s.etapa==="d3")return"Oi, "+p.apelido+"! Passando para lembrar que teu plano "+pl+" renova "+fdw(s.venc).toLowerCase()+" 💗\nValor: "+brl(v)+"."+pixBloco(v,p.id,s.ciclo)+"\n\nQualquer coisa, me chama!";
+  if(s.etapa==="d0")return"Oi, "+p.apelido+"! Hoje é o dia da renovação do teu plano "+pl+" ("+brl(v)+"). Segue o Pix para facilitar:"+pixBloco(v,p.id,s.ciclo)+"\n\nQuando pagares, me manda o comprovante por aqui 💗";
+  if(s.etapa==="a3")return"Oi, "+p.apelido+"! Tudo bem? Acho que a renovação do dia "+fd(s.venc)+" passou batido 😅\nSegue o Pix de novo ("+brl(v)+"):"+pixBloco(v,p.id,s.ciclo)+"\n\nSe precisares de qualquer coisa, me fala!";
+  return"Oi, "+p.apelido+"! Tua mensalidade do dia "+fd(s.venc)+" está em aberto há "+s.atraso+" dias. Quero muito seguir contigo nos treinos 💪\nConsegues regularizar até "+fd(addDays(dkey(new Date()),3))+"? Se estiver difícil, me chama que a gente combina."+pixBloco(s.devido||v,p.id,s.ciclo)}
+function msgRecibo(p,pg){const f=finDe(p.id)||{};let t="Recebi teu pagamento de "+brl(pg.valor)+", "+p.apelido+"! Obrigada 💗";
+  if(!f.liberadoEm)t+="\n\nTua planilha fica pronta até *"+fd(addDays(pg.data,7))+"*, e eu te aviso por aqui assim que ela estiver no app.";
+  else t+="\n\nTeu plano está em dia até *"+fd(addDays(f.liberadoEm,30*((pg.ciclo||0)+1)))+"*.";return t}
+function msgLiberada(p,Lx){const f=finDe(p.id);const L=Lx||(f&&f.liberadoEm);return p.apelido+", tua planilha está liberada no app! 🎉\n\n"+appUrl()+"\n\nEntra com teu usuário *"+p.login+"*."+(L&&valorPlano(f)?"\n\nTeu ciclo começou em "+fd(L)+", e a próxima renovação é dia *"+fd(addDays(L,30))+"*.":"")+"\n\nBora treinar! 💪"}
+/* janela de mensagem editável antes de abrir o WhatsApp */
+function msgSheet(p,titulo,texto,onSend){const w=contato(p.id);
+  sheet('<div class="sheet-top">'+avi(p,52)+'<div style="min-width:0"><span class="eyebrow">'+esc(titulo)+'</span><h3 style="margin-top:4px">'+esc(p.nome)+'</h3></div></div>'
+   +'<div class="field"><label for="ms-t">Mensagem (podes ajustar antes de enviar)</label><textarea class="input" id="ms-t" rows="12">'+esc(texto)+'</textarea></div>'
+   +'<div class="acts-row">'+(waLink(w,"x")?'<a class="btn wa" id="ms-wa" target="_blank" rel="noopener">Abrir no WhatsApp</a>':'<span class="muted small">Cadastre o WhatsApp do aluno para enviar direto.</span>')+'<button class="btn line" id="ms-cp" type="button">Copiar texto</button></div>',titulo);
+  const ta=$("#ms-t"),a=$("#ms-wa");const upd=()=>{if(a)a.href=waLink(w,ta.value)};upd();ta.addEventListener("input",upd);
+  if(a)a.addEventListener("click",()=>{if(onSend)onSend();setTimeout(closeSheet,300)});
+  $("#ms-cp").onclick=async()=>{try{await navigator.clipboard.writeText(ta.value);toast("Mensagem copiada.");if(onSend)onSend()}catch(e){ta.select();toast("Selecione e copie o texto.")}}}
+async function marcarAviso(id,ciclo,etapa){const f=finDe(id);if(!f)return;const av=Object.assign({},f.avisos||{});const k="c"+ciclo;av[k]=Array.from(new Set((av[k]||[]).concat([etapa])));await api.update("fin",id,{avisos:av})}
+/* ---------- números do painel ---------- */
+function finMes(ym,hoje){let previsto=0,recebido=0,receber=0;
+  state.pagamentos.forEach(x=>{if(String(x.data).slice(0,7)===ym)recebido+=Number(x.valor)||0});
+  ativos().forEach(p=>{const f=finDe(p.id),v=valorPlano(f);if(!v)return;const pg=pagsDe(p.id),pagos=new Set(pg.map(x=>x.ciclo));
+    const p0=pg.find(x=>x.ciclo===0);if(p0&&String(p0.data).slice(0,7)===ym)previsto+=v;
+    if(!f.liberadoEm)return;for(let k=1;k<400;k++){const dv=addDays(f.liberadoEm,30*k);if(dv.slice(0,7)>ym)break;if(dv.slice(0,7)===ym){previsto+=v;if(!pagos.has(k)&&dv>=hoje)receber+=v}}});
+  return{previsto,recebido,receber}}
+function finResumo(){const hoje=dkey(new Date());const rs=ativos().map(p=>({p,s:finStatus(p.id,hoje)}));
+  const pag=rs.filter(r=>r.s.v>0);const mrr=pag.reduce((a,r)=>a+r.s.v,0);
+  const atr=rs.filter(r=>r.s.k==="atraso");const emAtraso=atr.reduce((a,r)=>a+r.s.devido,0);
+  const m=finMes(hoje.slice(0,7),hoje);
+  return{hoje,rs,mrr,pagantes:pag.length,atrasados:atr.length,emAtraso,inad:mrr?emAtraso/mrr:0,ticket:pag.length?mrr/pag.length:0,mes:m}}
+let finFiltro="todos";
+const finPronto=()=>!useSB||!!(authU&&authU.dbv>=9);
+function pFin(){if(!finPronto())return'<div class="card cfg-warn" style="max-width:620px"><h2>Falta atualizar o banco</h2><p>O Financeiro precisa da versão 9 do banco, com as regras que deixam cada atleta ver só o próprio plano. Até lá, nada financeiro é gravado.</p></div>';const R=finResumo(),hoje=R.hoje;
+  const passos=[];R.rs.forEach(({p,s})=>{const a=anamDe(p.id);
+    if(s.k==="sem")passos.push({p,o:0,t:"Definir o plano",d:"Escolha Fundador, Atleta, Isento ou Personalizado.",b:'<button class="btn sm line" data-finopen="'+esc(p.id)+'">Definir</button>'});
+    else if(s.k==="aguarda"||(s.k==="isento"&&!s.f.liberadoEm)){if(!(a&&a.preenchidoEm)&&!p.anamneseOk)passos.push({p,o:3,t:"Aguardando a anamnese",d:p.anamnesePedida?"Pedida em "+fd(p.anamnesePedida)+".":"Ainda não foi enviada.",b:'<button class="btn sm line" data-perfil="'+esc(p.id)+'">Ver ficha</button>'});
+      else if(!s.f.boasVindasEm)passos.push({p,o:1,t:"Anamnese preenchida: enviar boas-vindas",d:s.v?"Mensagem com o objetivo, o prazo de 7 dias e o Pix do 1º mês.":"Mensagem com o objetivo e o prazo de 7 dias.",b:'<button class="btn sm wa" data-finmsg="bv" data-id="'+esc(p.id)+'">Mensagem</button>'});
+      else if(s.v)passos.push({p,o:2,t:"Aguardando comprovante",d:"Boas-vindas enviadas em "+fd(s.f.boasVindasEm)+".",b:'<button class="btn sm" data-finpay="'+esc(p.id)+'">Registrar pagamento</button>'});
+      else passos.push({p,o:2,t:"Liberar planilha",d:"Isento · boas-vindas enviadas em "+fd(s.f.boasVindasEm)+".",b:'<button class="btn sm blue" data-finlib="'+esc(p.id)+'">Liberar hoje</button>'})}
+    else if(s.k==="liberar")passos.push({p,o:0,t:"Liberar planilha até "+fd(s.prazo),d:s.dias<0?"Prazo passou há "+(-s.dias)+" dia(s).":s.dias===0?"O prazo é hoje.":"Faltam "+s.dias+" dia(s). O ciclo de 30 dias começa na liberação.",b:'<button class="btn sm blue" data-finlib="'+esc(p.id)+'">Liberar hoje</button>',risk:s.dias<=0})});
+  passos.sort((a,b)=>a.o-b.o);
+  const fila=R.rs.filter(({s})=>s.etapa&&!avisado(s.f,s.ciclo,s.etapa)).sort((a,b)=>a.s.dd-b.s.dd);
+  const filtros=[["todos","Todos"],["atraso","Em atraso"],["vence","Vencendo"],["emdia","Em dia"],["aguarda","1º pagamento"],["isento","Isentos"]];
+  const lista=R.rs.filter(({s})=>finFiltro==="todos"||(finFiltro==="vence"?(s.k==="vence"||s.k==="hoje"):finFiltro==="aguarda"?(s.k==="aguarda"||s.k==="liberar"||s.k==="sem"):s.k===finFiltro))
+    .sort((a,b)=>{const o={atraso:0,hoje:1,vence:2,liberar:3,aguarda:4,sem:5,emdia:6,isento:7};return(o[a.s.k]-o[b.s.k])||((a.s.dd||0)-(b.s.dd||0))||a.p.nome.localeCompare(b.p.nome,"pt-BR")});
+  const meses=[];for(let i=5;i>=0;i--){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-i);const ym=dkey(d).slice(0,7);meses.push({ym,lb:d.toLocaleDateString("pt-BR",{month:"short"}).replace(".",""),m:finMes(ym,hoje)})}
+  const mx=Math.max(1,...meses.map(x=>Math.max(x.m.previsto,x.m.recebido)));
+  const st=(n,l,cls)=>'<div class="stat'+(cls?" "+cls:"")+'"><b class="num">'+n+'</b><span>'+l+'</span></div>';
+  return'<div style="display:grid;gap:18px">'
+   +'<div class="card"><div class="acts-row" style="justify-content:space-between"><h2>Visão do mês</h2><span class="muted small">'+esc(new Date().toLocaleDateString("pt-BR",{month:"long",year:"numeric"}))+'</span></div>'
+   +'<div class="fin-stats">'+st(brl(R.mrr),"receita mensal ("+R.pagantes+(R.pagantes===1?" pagante)":" pagantes)"))+st(brl(R.mes.recebido),"recebido no mês")+st(brl(R.mes.receber),"a receber no mês")+st(brl(R.emAtraso),R.atrasados+" em atraso",R.atrasados?"risk":"")+st(Math.round(R.inad*100)+"%","inadimplência",R.inad>0.1?"risk":"")+st(brl(R.ticket),"ticket médio")+'</div>'
+   +'<div class="fin-chart" role="img" aria-label="Recebido e previsto nos últimos 6 meses">'+meses.map(x=>'<div class="fc-col"><div class="fc-bars"><i class="prev" style="height:'+Math.round(x.m.previsto/mx*100)+'%" title="Previsto '+brl(x.m.previsto)+'"></i><i class="rec" style="height:'+Math.round(x.m.recebido/mx*100)+'%" title="Recebido '+brl(x.m.recebido)+'"></i></div><span>'+esc(x.lb)+'</span></div>').join("")+'</div><p class="muted small"><span class="fc-key prev"></span> previsto <span class="fc-key rec"></span> recebido · últimos 6 meses</p></div>'
+   +'<div class="pgrid"><div class="card"><h2>Próximos passos</h2><p class="muted small">Entrada de atletas novos: anamnese, boas-vindas, 1º pagamento e liberação da planilha.</p><div style="display:grid;gap:8px">'
+   +(passos.length?passos.map(x=>'<div class="row-p'+(x.risk?" risk":"")+'">'+avi(x.p,40)+'<div class="nm"><button class="linkbtn" style="color:var(--ink);font-size:14px" data-finopen="'+esc(x.p.id)+'">'+esc(x.p.nome)+'</button><small><b>'+esc(x.t)+'</b> · '+esc(x.d)+'</small></div>'+x.b+'</div>').join(""):'<div class="empty">Nenhum atleta novo esperando.</div>')
+   +'</div></div><div class="card"><h2>Cobranças de hoje</h2><p class="muted small">Quem precisa de mensagem agora. Ao enviar, sai da fila.</p><div style="display:grid;gap:8px">'
+   +(fila.length?fila.map(({p,s})=>'<div class="row-p">'+avi(p,40)+'<div class="nm"><button class="linkbtn" style="color:var(--ink);font-size:14px" data-finopen="'+esc(p.id)+'">'+esc(p.nome)+'</button><small>'+esc(ETAPAS[s.etapa])+' · '+brl(s.devido||s.v)+' · venc. '+fd(s.venc)+'</small></div><button class="btn sm wa" data-finmsg="etapa" data-id="'+esc(p.id)+'">Mensagem</button></div>').join(""):'<div class="empty">Nenhuma cobrança para hoje. 💗</div>')
+   +'</div></div></div>'
+   +'<div class="card"><div class="acts-row" style="justify-content:space-between"><h2>Atletas</h2><div class="chips">'+filtros.map(([k,l])=>'<button class="fchip'+(finFiltro===k?" on":"")+'" data-finf="'+k+'">'+l+'</button>').join("")+'</div></div>'
+   +'<div class="scroll-x"><table class="tbl"><thead><tr><th>Atleta</th><th>Plano</th><th>Situação</th><th>Próx. vencimento</th><th></th></tr></thead><tbody>'
+   +(lista.length?lista.map(({p,s})=>'<tr><td><div style="display:flex;gap:8px;align-items:center">'+avi(p,28)+'<span>'+esc(p.nome)+'</span></div></td><td>'+esc(planoNome(s.f))+(s.v?'<br><small class="muted num">'+brl(s.v)+'</small>':"")+'</td><td><span class="pill '+s.pill+'">'+esc(s.lbl)+'</span></td><td class="num">'+(s.venc?fd(s.venc):s.prazo?"liberar até "+fd(s.prazo):"—")+'</td><td><button class="linkbtn" data-finopen="'+esc(p.id)+'">Abrir</button></td></tr>').join(""):'<tr><td colspan="5" class="muted">Ninguém nesse filtro.</td></tr>')
+   +'</tbody></table></div><div class="acts-row"><button class="btn line sm" id="fin-csv" type="button">Exportar pagamentos (CSV)</button></div></div></div>'}
+function bindFin(){
+  $$("[data-finf]").forEach(b=>b.onclick=()=>{finFiltro=b.dataset.finf;renderPainel()});
+  const c=$("#fin-csv");if(c)c.onclick=()=>{const rows=[["Data","Atleta","Plano","Ciclo","Valor","Forma","Obs"]].concat(state.pagamentos.slice().sort((a,b)=>String(a.data).localeCompare(b.data)).map(x=>{const p=pById(x.alunoId);return[x.data,p?p.nome:x.alunoId,planoNome(finDe(x.alunoId)),x.ciclo===0?"1º mês":"Ciclo "+(x.ciclo+1),String(Number(x.valor).toFixed(2)).replace(".",","),x.forma||"",x.obs||""]}));
+    const csv="﻿"+rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(";")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="time-da-gi-pagamentos-"+dkey(new Date())+".csv";document.body.appendChild(a);a.click();a.remove()};
+}
+/* ações (delegadas): funcionam no Financeiro, no perfil do aluno e na ficha */
+document.addEventListener("click",async e=>{if(!isCoach())return;const t=e.target.closest("[data-finopen],[data-finmsg],[data-finpay],[data-finlib]");if(!t)return;e.preventDefault();
+  if(t.dataset.finopen)return finSheet(t.dataset.finopen);
+  if(t.dataset.finpay)return finSheet(t.dataset.finpay,"pay");
+  if(t.dataset.finlib)return liberar(t.dataset.finlib,dkey(new Date()));
+  const p=pById(t.dataset.id);if(!p)return;const s=finStatus(p.id);
+  if(t.dataset.finmsg==="bv")return msgSheet(p,"Boas-vindas pós-anamnese",msgBoasVindas(p),()=>api.update("fin",p.id,{boasVindasEm:dkey(new Date())}));
+  if(t.dataset.finmsg==="etapa"&&s.etapa)return msgSheet(p,ETAPAS[s.etapa],msgEtapa(p,s),()=>marcarAviso(p.id,s.ciclo,s.etapa));
+  if(t.dataset.finmsg==="lib")return msgSheet(p,"Planilha liberada",msgLiberada(p));
+  if(t.dataset.finmsg==="recibo"){const pg=pagsDe(p.id).slice(-1)[0];if(pg)return msgSheet(p,"Confirmação de pagamento",msgRecibo(p,pg))}
+});
+async function liberar(id,data){const p=pById(id);if(!finDe(id)){toast("Defina o plano primeiro.");return finSheet(id)}
+  if(await api.update("fin",id,{liberadoEm:data})){toast("Planilha liberada em "+fd(data)+". O ciclo de 30 dias começa hoje.");setTimeout(()=>msgSheet(p,"Planilha liberada",msgLiberada(p,data)),250)}}
+function finSheet(id,foco){const p=pById(id);if(!p)return;if(!finPronto()){toast("Falta atualizar o banco para usar o Financeiro.");return}const s=finStatus(id),f=s.f||{};const pg=pagsDe(id).slice().reverse();const hoje=dkey(new Date());
+  const prox=s.k==="aguarda"?0:s.ciclo!=null?s.ciclo:0;const vDef=s.k==="atraso"?s.v:s.v||0;
+  sheet('<div class="sheet-top">'+avi(p,60)+'<div style="min-width:0"><span class="pill '+s.pill+'">'+esc(s.lbl)+'</span><h3 style="margin-top:6px">'+esc(p.nome)+'</h3><p class="muted small">Financeiro · só você vê os detalhes</p></div></div>'
+   +'<form id="ff" class="form-grid" autocomplete="off"><div class="field"><label for="ff-pl">Plano</label><select class="input" id="ff-pl"><option value="">Escolha…</option>'+Object.entries(PLANOS).map(([k,P])=>'<option value="'+k+'"'+(f.plano===k?" selected":"")+'>'+P.n+(P.v!=null?" · "+brl(P.v):"")+'</option>').join("")+'</select></div>'
+   +'<div class="field" id="ff-vw"'+(f.plano==="personalizado"?"":" hidden")+'><label for="ff-v">Valor personalizado (R$)</label><input class="input num" id="ff-v" inputmode="decimal" value="'+esc(f.valor!=null?String(f.valor).replace(".",","):"")+'"></div>'
+   +'<div class="field"><label for="ff-lib">Planilha liberada em</label><input class="input" id="ff-lib" type="date" value="'+esc(f.liberadoEm||"")+'"><small class="muted">A data da liberação inicia os ciclos de 30 dias.</small></div>'
+   +'<div class="field full"><button class="btn line sm" type="submit">Salvar plano</button></div></form>'
+   +(s.k!=="sem"&&s.k!=="isento"?'<form id="fp2" class="card" style="gap:10px;background:var(--sky)" autocomplete="off"><h3>Registrar pagamento · '+(prox===0?"1º mês":"ciclo de "+fd(s.venc))+'</h3><div class="form-grid"><div class="field"><label for="fp2-v">Valor (R$)</label><input class="input num" id="fp2-v" inputmode="decimal" value="'+esc(String(vDef).replace(".",","))+'"></div><div class="field"><label for="fp2-d">Data</label><input class="input" id="fp2-d" type="date" value="'+hoje+'"></div><div class="field"><label for="fp2-f">Forma</label><select class="input" id="fp2-f">'+FORMAS.map(x=>'<option>'+x+'</option>').join("")+'</select></div><div class="field"><label for="fp2-o">Observação</label><input class="input" id="fp2-o" maxlength="80" placeholder="Desconto, comprovante…"></div></div><button class="btn" type="submit">Marcar como pago</button></form>':"")
+   +'<div><span class="lbl">Mensagens</span><div class="acts-row" style="margin-top:6px">'
+     +'<button class="btn sm wa" data-finmsg="bv" data-id="'+esc(id)+'">Boas-vindas'+(f.boasVindasEm?" ✓":"")+'</button>'
+     +(s.etapa?'<button class="btn sm wa" data-finmsg="etapa" data-id="'+esc(id)+'">'+esc(ETAPAS[s.etapa])+(avisado(f,s.ciclo,s.etapa)?" ✓":"")+'</button>':"")
+     +(pg.length?'<button class="btn sm line" data-finmsg="recibo" data-id="'+esc(id)+'">Confirmar pagamento</button>':"")
+     +(f.liberadoEm?'<button class="btn sm line" data-finmsg="lib" data-id="'+esc(id)+'">Planilha liberada</button>':"")+'</div></div>'
+   +'<div><span class="lbl">Histórico</span>'+(pg.length?'<div class="mini-list" style="margin-top:6px">'+pg.map(x=>'<div><span>'+(x.ciclo===0?"1º mês":"Ciclo "+fd(addDays(f.liberadoEm||x.data,30*x.ciclo)))+' · <b class="num">'+brl(x.valor)+'</b> · '+esc(x.forma||"")+(x.obs?' · <span class="muted">'+esc(x.obs)+'</span>':"")+'</span><span class="muted">'+fd(x.data)+' <button class="linkbtn" style="color:var(--risk)" data-pgdel="'+esc(x.id)+'" aria-label="Apagar pagamento">apagar</button></span></div>').join("")+'</div>':'<p class="muted small">Nenhum pagamento registrado.</p>')+'</div>',"Financeiro de "+p.nome);
+  const sel=$("#ff-pl");sel.onchange=()=>{$("#ff-vw").hidden=sel.value!=="personalizado"};
+  const money=s=>{const v=Number(String(s).replace(/\./g,"").replace(",","."));return isFinite(v)?Math.round(v*100)/100:NaN};
+  $("#ff").onsubmit=async ev=>{ev.preventDefault();const pl=sel.value;if(!pl){toast("Escolha um plano.");return}const o={plano:pl,liberadoEm:$("#ff-lib").value||""};
+    if(pl==="personalizado"){const v=money($("#ff-v").value);if(!(v>=0)){toast("Informe o valor personalizado.");return}o.valor=v}
+    if(await api.set("fin",id,Object.assign({},finDe(id)||{},o))){toast("Plano salvo.");setTimeout(()=>finSheet(id),200)}};
+  const fp=$("#fp2");if(fp){if(foco==="pay")setTimeout(()=>$("#fp2-v").focus(),60);
+    fp.onsubmit=async ev=>{ev.preventDefault();const v=money($("#fp2-v").value),d=$("#fp2-d").value;if(!(v>=0)||!d){toast("Confira o valor e a data.");return}
+      const cur=finStatus(id);const ciclo=cur.k==="aguarda"?0:cur.ciclo!=null?cur.ciclo:0;
+      const pid="pg"+uid();if(await api.set("pagamentos",pid,{alunoId:id,ciclo,valor:v,data:d,forma:$("#fp2-f").value,obs:$("#fp2-o").value.trim(),ts:new Date().toISOString()})){
+        toast("Pagamento registrado.");setTimeout(()=>msgSheet(p,"Confirmação de pagamento",msgRecibo(p,{valor:v,data:d,ciclo})),300)}}}
+  $$("[data-pgdel]").forEach(b=>b.onclick=async()=>{if(b.dataset.arm!=="1"){b.dataset.arm="1";b.textContent="confirmar?";return}if(await api.del("pagamentos",b.dataset.pgdel)){toast("Pagamento apagado.");setTimeout(()=>finSheet(id),200)}});
+}
+/* ---------- lado do atleta: discreto ---------- */
+function finAluno(p){const s=finStatus(p.id);if(s.k==="sem")return"";
+  const linha=s.k==="isento"?"Plano isento 💗":s.k==="aguarda"?"Teu plano começa com o 1º pagamento.":s.k==="liberar"?"Pagamento recebido. Tua planilha fica pronta até "+fd(s.prazo)+".":s.k==="emdia"?"Em dia até "+fd(s.venc)+".":s.k==="atraso"?"Renovação de "+fd(s.venc)+" em aberto.":"Renova "+(s.k==="hoje"?"hoje":fdw(s.venc).toLowerCase())+".";
+  return'<div class="fin-al"><div><span class="lbl">Meu plano</span><b>'+esc(planoNome(s.f))+(s.v?' <span class="muted num">· '+brl(s.v)+'</span>':"")+'</b><small class="'+(s.k==="atraso"?"risk":"")+'">'+esc(linha)+'</small></div><button class="linkbtn" id="fin-al-go">Pagamentos</button></div>'}
+function finAvisoAluno(p){const s=finStatus(p.id);if(!["vence","hoje","atraso"].includes(s.k))return"";
+  return'<div class="fin-nudge"><span>💗 '+(s.k==="atraso"?"Tua renovação de "+fd(s.venc)+" ainda está em aberto.":"Teu plano renova "+(s.k==="hoje"?"hoje":fdw(s.venc).toLowerCase())+".")+'</span><button class="linkbtn" id="fin-nudge-go">Ver Pix</button></div>'}
+function finAlunoSheet(p){const s=finStatus(p.id);const pg=pagsDe(p.id).slice().reverse();const f=s.f||{};const pagar=s.v>0&&["aguarda","vence","hoje","atraso"].includes(s.k);const val=s.k==="atraso"?s.devido:s.v;const code=pagar?pixPayload(val,"TG"+String(p.id).slice(0,8)+"C"+(s.ciclo||0)):"";
+  sheet('<div class="sheet-top"><div style="min-width:0"><span class="eyebrow">Meu plano</span><h3 style="margin-top:4px">'+esc(planoNome(f))+(s.v?" · "+brl(s.v):"")+'</h3><p class="muted small">'+(s.v?"Renova a cada 30 dias, contando da liberação da planilha.":"Sem cobrança.")+'</p></div></div>'
+   +'<div class="stats"><div class="stat"><b class="num" style="font-size:15px">'+esc(s.k==="emdia"||s.k==="vence"||s.k==="hoje"||s.k==="atraso"?fd(s.venc):"—")+'</b><span>próxima renovação</span></div><div class="stat"><b class="num" style="font-size:15px">'+esc(f.liberadoEm?fd(f.liberadoEm):"—")+'</b><span>planilha liberada</span></div></div>'
+   +(pagar?'<div class="card" style="gap:8px;background:var(--sky)"><b>Pix · '+brl(val)+'</b><p class="small">Chave (celular): <b class="num">'+esc(pixChaveTxt())+'</b></p><textarea class="input num" id="pix-cc" rows="3" readonly>'+esc(code)+'</textarea><div class="acts-row"><button class="btn sm" id="pix-cp" type="button">Copiar Pix copia e cola</button></div><p class="muted small">Depois de pagar, manda o comprovante para a Gi no WhatsApp.</p></div>':"")
+   +'<div><span class="lbl">Pagamentos</span>'+(pg.length?'<div class="mini-list" style="margin-top:6px">'+pg.map(x=>'<div><span>'+(x.ciclo===0?"1º mês":"Renovação")+' · <b class="num">'+brl(x.valor)+'</b></span><span class="muted">'+fd(x.data)+'</span></div>').join("")+'</div>':'<p class="muted small">Nenhum pagamento ainda.</p>')+'</div>',"Meu plano");
+  const b=$("#pix-cp");if(b)b.onclick=async()=>{try{await navigator.clipboard.writeText(code);toast("Pix copiado. É só colar no app do banco.")}catch(e){$("#pix-cc").select();toast("Selecione e copie o código.")}}}
+let finSub=null,pagSub=null;
+function watchFin(){if(!db||finSub)return;
+  finSub=db.collection("fin").onSnapshot(s=>{state.fin=s.docs.map(d=>Object.assign({id:d.id},d.data()));soon()},()=>{});
+  pagSub=db.collection("pagamentos").onSnapshot(s=>{state.pagamentos=s.docs.map(d=>Object.assign({id:d.id},d.data()));soon()},()=>{})}
 
 /* ===== anamnese ===== */
 const TRAB=["Sentado durante a maior parte do dia","Em pé durante a maior parte do dia","Caminho ou me movimento bastante","Realizo esforço físico frequente","Minha rotina varia bastante"];

@@ -44,7 +44,15 @@ await as(coach,"update public.docs set data=data||'{\"arquivado\":true}' where c
 r=await as(al,"select col from public.docs");t('aluno arquivado só enxerga o próprio perfil e a própria ficha',r.ok&&r.ok.every(x=>x.col==='perfis'||x.col==='anamnese')&&r.ok.length<=2,r);
 r=await as(al,"insert into public.docs(col,id,data) values('checkins','k9',$1)",[JSON.stringify({alunoId:al})]);t('aluno arquivado não registra treino',!!r.err);
 await db.exec("set role anon");try{await db.query("select * from public.docs");t('visitante sem login não lê nada',false)}catch(e){t('visitante sem login não lê nada',true)}await db.exec("reset role");
-r=await as(coach,"select public.tg_versao() v");t('versão do banco = 8',r.ok&&r.ok[0].v===8,r);
+// financeiro
+r=await as(coach,"insert into public.docs(col,id,data) values('fin',$1,'{\"plano\":\"atleta\"}'),('fin',$2,'{\"plano\":\"fundador\"}'),('pagamentos','pg1',$3),('pagamentos','pg2',$4)",[al,st,JSON.stringify({alunoId:al,valor:160,ciclo:0}),JSON.stringify({alunoId:st,valor:120,ciclo:0})]);t('coach registra plano e pagamentos',r.ok,r);
+await as(coach,"update public.docs set data=data||'{\"arquivado\":false}' where col='perfis' and id=$1",[al]);
+r=await as(al,"select id from public.docs where col='fin'");t('aluno vê só o próprio plano',r.ok&&r.ok.length===1&&r.ok[0].id===al,r);
+r=await as(al,"select id from public.docs where col='pagamentos'");t('aluno vê só os próprios pagamentos',r.ok&&r.ok.length===1&&r.ok[0].id==='pg1',r);
+r=await as(al,"insert into public.docs(col,id,data) values('pagamentos','pgx',$1)",[JSON.stringify({alunoId:al,valor:1,ciclo:1})]);t('aluno não registra pagamento',!!r.err);
+r=await as(al,"update public.docs set data='{\"plano\":\"isento\"}' where col='fin' and id=$1 returning id",[al]);t('aluno não muda o próprio plano',!!r.err||(r.ok&&r.ok.length===0),r);
+r=await as(coach,"select count(*)::int n from public.docs where col in ('fin','pagamentos')");t('coach vê todo o financeiro',r.ok&&r.ok[0].n===4,r);
+r=await as(coach,"select public.tg_versao() v");t('versão do banco = 9',r.ok&&r.ok[0].v===9,r);
 r=await as(coach,"select public.admin_create_user('novo@timedagi.app','tg_4321') id");const nid=r.ok&&r.ok[0].id;
 const nu=(await db.query("select u.email,u.email_confirmed_at is not null c,u.phone_change,u.reauthentication_token,i.provider,i.provider_id from auth.users u join auth.identities i on i.user_id=u.id where u.id=$1",[nid])).rows[0]||{};
 t('coach cria conta de aluno (confirmada, com identidade, sem campos nulos)',nu.email==='novo@timedagi.app'&&nu.c&&nu.phone_change===''&&nu.reauthentication_token===''&&nu.provider==='email'&&nu.provider_id===nid,nu);
@@ -53,7 +61,7 @@ r=await as(al2||coach,"select public.tg_new_auth_user('x@timedagi.app','tg_1111'
 // zerar + instalar do zero (sem coach criada antes)
 await db.exec(fs.readFileSync('../dist/zerar.sql','utf8'));
 t('zerar apaga contas do app',(await db.query("select count(*)::int n from auth.users where email like '%@timedagi.app'")).rows[0].n===0);
-const res2=await db.exec(sql);const msg2=res2[res2.length-1].rows[0].resultado;t('instalar do zero cria a coach e conclui',/Pronto! Banco na versão 8/.test(msg2),msg2);
+const res2=await db.exec(sql);const msg2=res2[res2.length-1].rows[0].resultado;t('instalar do zero cria a coach e conclui',/Pronto! Banco na versão 9/.test(msg2),msg2);
 const c2=(await db.query("select id,encrypted_password p from auth.users where email='coachgi@timedagi.app'")).rows[0];
 t('senha da coach = tg_0123',c2&&c2.p==='h:'+(await db.query("select md5('tg_0123') m")).rows[0].m);
 r=await as(c2.id,"select public.is_admin() a");t('coach nova é admin',r.ok&&r.ok[0].a===true,r);

@@ -1,5 +1,5 @@
 -- =====================================================================
--- Time da Gi · INSTALAÇÃO DO BANCO (versão 8)
+-- Time da Gi · INSTALAÇÃO DO BANCO (versão 9)
 -- Cole TUDO no SQL Editor do Supabase e clique em "Run".
 -- Pode rodar quantas vezes quiser: não apaga dados e deixa tudo na versão certa.
 -- Ele também cria a conta da coach (usuário coachgi, senha 0123) se ela não existir.
@@ -78,11 +78,13 @@ drop policy if exists docs_delete on public.docs;
 
 -- Ler: aluno ativo lê o mural, perfis e planilhas. Conta sem perfil não lê nada
 -- (só o próprio perfil, para o app saber se está arquivado).
--- WhatsApp (contatos) só a coach. Anamnese: a coach e o próprio aluno.
+-- WhatsApp (contatos) só a coach. Anamnese e financeiro (fin, pagamentos): a coach e o próprio aluno.
 create policy docs_read on public.docs for select to authenticated using (
   case col
     when 'contatos' then public.is_admin()
     when 'anamnese' then public.is_admin() or id = auth.uid()::text
+    when 'fin'        then public.is_admin() or id = auth.uid()::text
+    when 'pagamentos' then public.is_admin() or data->>'alunoId' = auth.uid()::text
     when 'perfis'   then public.is_member() or id = auth.uid()::text
     else public.is_member()
   end
@@ -188,7 +190,7 @@ revoke all on function public.admin_create_user(text, text) from public, anon;
 
 -- Versão do banco (o app confere e avisa a coach se estiver desatualizado)
 create or replace function public.tg_versao()
-returns int language sql stable as $$ select 8 $$;
+returns int language sql stable as $$ select 9 $$;
 grant execute on function public.tg_versao() to authenticated;
 grant execute on function public.admin_create_user(text, text) to authenticated;
 
@@ -226,6 +228,6 @@ on conflict do nothing;
 
 select case when exists (select 1 from public.admins a join auth.users u on u.id = a.uid where u.email = 'coachgi@timedagi.app')
              and exists (select 1 from pg_proc where proname = 'admin_create_user')
-            then 'Pronto! Banco na versão 8. Coach: usuário coachgi.'
+            then 'Pronto! Banco na versão 9. Coach: usuário coachgi.'
             else 'Algo não foi criado. Copie a mensagem de erro acima e me mande.'
        end as resultado;

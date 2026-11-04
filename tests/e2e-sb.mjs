@@ -133,6 +133,56 @@ try{
   // alunos de teste
   await page.click('#ptabs [data-tab="ajustes"]');await page.click('#ex-add');await page.waitForFunction(()=>document.querySelector('#toast-root').textContent.includes('criados'),null,{timeout:20000});
   ok('Alunos de teste ganham contas reais',(await sql("select count(*)::int n from auth.users where email in ('aninha@timedagi.app','brunao@timedagi.app','carlinha@timedagi.app')"))[0].n===3);
+  // ===== financeiro =====
+  {const poke2=async()=>{await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await page.waitForTimeout(700)};
+  const hojeK=(n=0)=>{const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+  const an=(await sql("select id from public.docs where col='perfis' and data->>'login'='aninha'"))[0].id;
+  await page.evaluate(()=>{navigator.clipboard.writeText=async()=>{}});
+  await page.click('#ptabs [data-tab="fin"]');await page.waitForSelector('.fin-stats');
+  ok('Financeiro abre com visão do mês e próximos passos',(await page.textContent('#painel')).includes('Próximos passos')&&(await page.textContent('#painel')).includes('Definir o plano'));
+  await page.click(`#painel [data-finopen="${an}"]`);await page.selectOption('#ff-pl','atleta');await page.click('#ff button[type="submit"]');await page.waitForTimeout(900);
+  ok('Coach define plano Atleta',(await sql(`select data->>'plano' p from public.docs where col='fin' and id='${an}'`))[0]?.p==='atleta');
+  await page.evaluate(()=>{const c=document.querySelector('#sx')||document.querySelector('#ov');if(c)c.click()});await page.evaluate(()=>{document.querySelector('#sheet-root').innerHTML=''});
+  await db.query("insert into public.docs(col,id,data) values('anamnese',$1,$2) on conflict(col,id) do update set data=excluded.data",[an,JSON.stringify({d:{objetivo:'Correr 10 km sem parar',local:'academia do bairro',treina:'Sim',treinaQue:'corrida',treinaVezes:'2x',dores:'Joelho esquerdo dói em agachamento'},por:'aluno',preenchidoEm:hojeK()})]);
+  await db.query("update public.docs set data=data||$2 where col='perfis' and id=$1",[an,JSON.stringify({anamneseOk:hojeK()})]);
+  await page.click('#ptabs [data-tab="hoje"]');await page.click('#ptabs [data-tab="fin"]');await poke2();await page.click('#ptabs [data-tab="fin"]');
+  ok('Anamnese preenchida vira passo de boas-vindas',(await page.textContent('#painel')).includes('enviar boas-vindas'));
+  await page.click(`[data-finmsg="bv"][data-id="${an}"]`);const bv=await page.inputValue('#ms-t');
+  ok('Boas-vindas personalizadas: objetivo, dores, 7 dias, valor, Pix e comprovante',/correr 10 km sem parar/.test(bv)&&/dores/.test(bv)&&/7 dias/.test(bv)&&/R\$\s?160,00/.test(bv)&&/000201.*br\.gov\.bcb\.pix/.test(bv)&&/comprovante/.test(bv),bv);
+  const code=(bv.match(/000201.*$/m)||[''])[0].trim();
+  const crc=s=>{let c=0xFFFF;for(let i=0;i<s.length;i++){c^=s.charCodeAt(i)<<8;for(let j=0;j<8;j++)c=(c&0x8000)?((c<<1)^0x1021)&0xFFFF:(c<<1)&0xFFFF}return c.toString(16).toUpperCase().padStart(4,'0')};
+  ok('Pix copia e cola válido (chave +5551997770125, R$ 160,00, CRC confere)',code.includes('0114+5551997770125')&&code.includes('5406160.00')&&crc(code.slice(0,-4))===code.slice(-4),code);
+  await page.click('#ms-cp');await page.waitForTimeout(900);
+  ok('Enviar marca as boas-vindas como feitas',!!(await sql(`select data->>'boasVindasEm' b from public.docs where col='fin' and id='${an}'`))[0].b);
+  await page.evaluate(()=>{document.querySelector('#sheet-root').innerHTML=''});await page.click('#ptabs [data-tab="hoje"]');await page.click('#ptabs [data-tab="fin"]');
+  ok('Depois das boas-vindas: aguardando comprovante',(await page.textContent('#painel')).includes('Aguardando comprovante'));
+  await page.click(`[data-finpay="${an}"]`);await page.fill('#fp2-d',hojeK(-2));await page.click('#fp2 button[type="submit"]');await page.waitForSelector('#ms-t');
+  const rec=await page.inputValue('#ms-t');
+  const pg0=await sql(`select data from public.docs where col='pagamentos' and data->>'alunoId'='${an}'`);
+  ok('1º pagamento registrado (ciclo 0, R$ 160) com recibo e prazo de 7 dias',pg0.length===1&&pg0[0].data.ciclo===0&&Number(pg0[0].data.valor)===160&&rec.includes('fica pronta até'),JSON.stringify(pg0)+' '+rec);
+  await page.evaluate(()=>{document.querySelector('#sheet-root').innerHTML=''});await page.click('#ptabs [data-tab="hoje"]');await page.click('#ptabs [data-tab="fin"]');
+  ok('Pago e não liberado: aparece "Liberar planilha até" com o prazo',(await page.textContent('#painel')).includes('Liberar planilha até'));
+  await page.click(`#painel [data-finlib="${an}"]`);await page.waitForSelector('#ms-t');const lib=await page.inputValue('#ms-t');
+  ok('Liberar grava a data e gera a mensagem com a próxima renovação em 30 dias',(await sql(`select data->>'liberadoEm' l from public.docs where col='fin' and id='${an}'`))[0].l===hojeK()&&lib.includes('liberada')&&lib.includes(hojeK(30).slice(8,10)+'/'+hojeK(30).slice(5,7)),lib);
+  await page.evaluate(()=>{document.querySelector('#sheet-root').innerHTML=''});
+  const setLib=async n=>{await db.query("update public.docs set data=data||$2 where col='fin' and id=$1",[an,JSON.stringify({liberadoEm:hojeK(n)})]);await page.click('#ptabs [data-tab="hoje"]');await poke2();await page.click('#ptabs [data-tab="fin"]')};
+  await setLib(-28);
+  ok('Ciclo conta da liberação: faltando 2 dias entra o lembrete D-3 na fila',(await page.textContent('#painel')).includes('Lembrete (3 dias antes)'));
+  await setLib(-33);
+  ok('3 dias de atraso: fila de cobrança com atraso e inadimplência no painel',(await page.textContent('#painel')).includes('Atraso: 3 dias')&&(await page.textContent('.fin-stats')).includes('1 em atraso'));
+  await page.screenshot({path:'../fin-coach.png',fullPage:true});
+  await page.click(`[data-finmsg="etapa"][data-id="${an}"]`);await page.screenshot({path:'../fin-msg.png'});const a3=await page.inputValue('#ms-t');ok('Mensagem de atraso gentil com Pix',a3.includes('passou batido')&&a3.includes('000201'),a3);
+  await page.click('#ms-cp');await page.waitForTimeout(800);await page.evaluate(()=>{document.querySelector('#sheet-root').innerHTML=''});await page.click('#ptabs [data-tab="hoje"]');await poke2();await page.click('#ptabs [data-tab="fin"]');
+  ok('Depois de enviada, a cobrança sai da fila',!(await page.textContent('#painel')).includes('Atraso: 3 dias'));
+  // aluna vê o próprio plano
+  await logout();await login('aninha','1234');await page.waitForSelector('#view-eu:not([hidden])',{timeout:8000});await page.waitForTimeout(600);
+  ok('Atleta vê "Meu plano" discreto e o lembrete suave',(await page.textContent('#al-fin')).includes('Atleta')&&(await page.textContent('#al-nudge')).includes('em aberto'));
+  await page.screenshot({path:'../fin-aluno.png',fullPage:true});
+  await page.click('#fin-nudge-go');await page.waitForTimeout(300);await page.screenshot({path:'../fin-aluno-pix.png'});ok('Atleta abre os pagamentos e vê o Pix copia e cola',(await page.inputValue('#pix-cc')).startsWith('000201')&&(await page.textContent('.sheet')).includes('1º mês'));
+  await page.evaluate(()=>{document.querySelector('#sheet-root').innerHTML=''});
+  await logout();await login('brunao','1234');await page.waitForSelector('#view-eu:not([hidden])',{timeout:8000});await page.waitForTimeout(500);
+  ok('Outro atleta não vê o financeiro da colega',await page.evaluate(async()=>{const c=window.supabase.createClient('','');const a=(await c.from('docs').select('id,data').eq('col','fin')).data||[];const b=(await c.from('docs').select('id,data').eq('col','pagamentos')).data||[];return a.length===0&&b.length===0})&&(await page.textContent('#al-fin')).trim()==='');
+  await logout();await login('coachgi','0123');await page.waitForSelector('#view-painel:not([hidden])');}
   await logout();await login('aninha','1234');await page.waitForSelector('#view-eu:not([hidden])',{timeout:8000});ok('Aluna de teste entra com aninha / 1234',true);
   await page.screenshot({path:'../sb-aluno.png'});
   await page.reload();await page.waitForSelector('#view-eu:not([hidden])',{timeout:8000});ok('Login continua depois de recarregar a página',true);
