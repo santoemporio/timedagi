@@ -825,7 +825,7 @@ function renderAll(force){
   if(!ready()){showOnly("load");return}
   const m=me();
   if(!m&&useSB&&authU){const pp=pById(authU.id);sbLogout(pp&&pp.arquivado?"Seu acesso está pausado. Fale com a Gi.":"Seu cadastro não foi encontrado. Fale com a Gi.");return}
-  if(!m){if(sess){sess=null;LS.del("tg_sess3")}showOnly("gate");$("#cfg-warn").hidden=!((TGC||window.supabase)&&state.mode==="local");$("#foot").textContent="Time da Gi · zooei! × Coach Gi · versão 11";return}
+  if(!m){if(sess){sess=null;LS.del("tg_sess3")}showOnly("gate");$("#cfg-warn").hidden=!((TGC||window.supabase)&&state.mode==="local");$("#foot").textContent="Time da Gi · zooei! × Coach Gi · versão 12";return}
   watchFin();if(m==="coach"){watchContatos();watchAnamnese()}
   if(view==="eu"&&m==="coach")view="painel";
   if(view==="painel"&&m!=="coach")view="mural";
@@ -1088,7 +1088,7 @@ function pHoje(){const hoje=dkey(new Date());
    +'<div class="card"><h2>Treinos de hoje</h2><p class="muted small">'+esc(fdw(hoje))+' · quem tem treino marcado hoje.</p><div style="display:grid;gap:8px">'
    +(hojeLista.length?hojeLista.map(({p,s})=>'<div class="row-p">'+avi(p,40)+'<div class="nm"><button class="linkbtn" style="color:var(--ink);font-size:14px" data-perfil="'+esc(p.id)+'">'+esc(p.nome)+'</button><small>'+s.L+(s.i+1)+' · '+esc(s.dia.titulo||"Treino")+'</small></div><span class="pill '+(s.ck?"ok":"sky")+'">'+(s.ck?"✓ feito":"a fazer")+'</span></div>').join(""):'<div class="empty">Nenhum treino marcado para hoje.</div>')
    +'</div></div><div class="card"><h2>Precisam de um toque</h2><p class="muted small">Sem treino registrado há 4 dias ou mais. Um áudio seu agora vale mais que qualquer post.</p><div style="display:grid;gap:8px">'
-   +(parados.length?parados.map(r=>{const l=waLink(contato(r.p.id),"Oi, "+r.p.apelido+"! Tudo certo? Senti sua falta no treino. Bora retomar essa semana? 💗");
+   +(parados.length?parados.map(r=>{const l=waLink(contato(r.p.id),"Oi, "+nome1(r.p)+"! Tudo certo? Senti sua falta no treino. Bora retomar essa semana? 💗");
      return'<div class="row-p">'+avi(r.p,40)+'<div class="nm"><button class="linkbtn" style="color:var(--ink);font-size:14px" data-perfil="'+esc(r.p.id)+'">'+esc(r.p.nome)+'</button><small>'+(r.dias==null?"Nenhum treino registrado":r.dias+" dias sem treinar")+'</small></div>'+(l?'<a class="btn wa sm" href="'+esc(l)+'" target="_blank" rel="noopener">WhatsApp</a>':'<button class="btn line sm" data-editaluno="'+esc(r.p.id)+'">+ WhatsApp</button>')+'</div>'}).join(""):'<div class="empty">Todo mundo treinou nos últimos dias.</div>')
    +'</div></div><div class="card"><h2>Montar planilha</h2><p class="muted small">Quinzena termina em até 2 dias, ou o aluno ainda não tem planilha.</p><div style="display:grid;gap:8px">'
    +(fechando.length?fechando.map(r=>'<div class="row-p">'+avi(r.p,40)+'<div class="nm">'+esc(r.p.nome)+'<small>'+(r.q?"Quinzena "+r.q.ciclo+" termina "+fd(r.q.fim):"Sem planilha ainda")+'</small></div><button class="btn sm" data-montar="'+esc(r.p.id)+'">'+(r.q?"Próxima":"Criar")+'</button></div>').join(""):'<div class="empty">Todas as planilhas em dia.</div>')
@@ -1327,6 +1327,8 @@ async function criarExemplos(){
 
 
 
+/* primeiro nome para mensagens */
+const nome1=p=>{const n=String((p&&(p.nome||p.apelido))||"").trim().split(/\s+/)[0]||"";return n?n.charAt(0).toUpperCase()+n.slice(1):""};
 /* ===== financeiro ===== */
 const PLANOS={fundador:{n:"Fundador",v:120},atleta:{n:"Atleta",v:160},isento:{n:"Isento",v:0},personalizado:{n:"Personalizado",v:null}};
 const FORMAS=["Pix","Dinheiro","Cartão","Transferência"];
@@ -1372,21 +1374,21 @@ function msgBoasVindas(p){const f=finDe(p.id),v=valorPlano(f),a=anamDe(p.id),d=(
   if(obj)partes.push("teu objetivo é *"+obj.charAt(0).toLowerCase()+obj.slice(1)+"*");
   if(d.treina==="Sim"&&d.treinaQue)partes.push("que já treinas "+d.treinaQue.trim()+(d.treinaVezes?" ("+d.treinaVezes.trim()+")":""));
   if(d.local)partes.push("que vais treinar "+(/^(em|na|no|de|com)\b/i.test(d.local.trim())?"":"em ")+d.local.trim());
-  let t="Oi, "+p.apelido+"! Recebi tua ficha, obrigada por preencher com tanto cuidado 💗\n\n";
+  let t="Oi, "+nome1(p)+"! Recebi tua ficha, obrigada por preencher com tanto cuidado 💗\n\n";
   if(partes.length)t+="Vi que "+(partes.length>1?partes.slice(0,-1).join(", ")+" e "+partes[partes.length-1]:partes[0])+".";
   if(d.dores&&d.dores.trim()&&!/^(n[ãa]o|nenhum|nada)\b/i.test(d.dores.trim()))t+=" Também anotei o que contaste sobre dores e restrições, e vou levar isso em conta em cada exercício.";
   t+="\n\nAgora vou montar a tua planilha do zero, pensada para ti. ";
   if(!v){t+="Em até *7 dias* ela fica liberada no app e eu te aviso por aqui. Bora! 🚀";return t}
   t+="Ela fica liberada no app em até *7 dias* depois da confirmação do pagamento do primeiro mês.\n\nTeu plano: *"+planoNome(f)+"* · "+brl(v)+" a cada 30 dias. O ciclo começa a contar no dia em que a planilha for liberada."+pixBloco(v,p.id,0)+"\n\nAssim que pagares, me manda o *comprovante* aqui que eu já começo a montar! 🚀";return t}
 function msgEtapa(p,s){const v=s.v,pl=planoNome(s.f);
-  if(s.etapa==="d3")return"Oi, "+p.apelido+"! Passando para lembrar que teu plano "+pl+" renova "+fdw(s.venc).toLowerCase()+" 💗\nValor: "+brl(v)+"."+pixBloco(v,p.id,s.ciclo)+"\n\nQualquer coisa, me chama!";
-  if(s.etapa==="d0")return"Oi, "+p.apelido+"! Hoje é o dia da renovação do teu plano "+pl+" ("+brl(v)+"). Segue o Pix para facilitar:"+pixBloco(v,p.id,s.ciclo)+"\n\nQuando pagares, me manda o comprovante por aqui 💗";
-  if(s.etapa==="a3")return"Oi, "+p.apelido+"! Tudo bem? Acho que a renovação do dia "+fd(s.venc)+" passou batido 😅\nSegue o Pix de novo ("+brl(v)+"):"+pixBloco(v,p.id,s.ciclo)+"\n\nSe precisares de qualquer coisa, me fala!";
-  return"Oi, "+p.apelido+"! Tua mensalidade do dia "+fd(s.venc)+" está em aberto há "+s.atraso+" dias. Quero muito seguir contigo nos treinos 💪\nConsegues regularizar até "+fd(addDays(dkey(new Date()),3))+"? Se estiver difícil, me chama que a gente combina."+pixBloco(s.devido||v,p.id,s.ciclo)}
-function msgRecibo(p,pg){const f=finDe(p.id)||{};let t="Recebi teu pagamento de "+brl(pg.valor)+", "+p.apelido+"! Obrigada 💗";
+  if(s.etapa==="d3")return"Oi, "+nome1(p)+"! Passando para lembrar que teu plano "+pl+" renova "+fdw(s.venc).toLowerCase()+" 💗\nValor: "+brl(v)+"."+pixBloco(v,p.id,s.ciclo)+"\n\nQualquer coisa, me chama!";
+  if(s.etapa==="d0")return"Oi, "+nome1(p)+"! Hoje é o dia da renovação do teu plano "+pl+" ("+brl(v)+"). Segue o Pix para facilitar:"+pixBloco(v,p.id,s.ciclo)+"\n\nQuando pagares, me manda o comprovante por aqui 💗";
+  if(s.etapa==="a3")return"Oi, "+nome1(p)+"! Tudo bem? Acho que a renovação do dia "+fd(s.venc)+" passou batido 😅\nSegue o Pix de novo ("+brl(v)+"):"+pixBloco(v,p.id,s.ciclo)+"\n\nSe precisares de qualquer coisa, me fala!";
+  return"Oi, "+nome1(p)+"! Tua mensalidade do dia "+fd(s.venc)+" está em aberto há "+s.atraso+" dias. Quero muito seguir contigo nos treinos 💪\nConsegues regularizar até "+fd(addDays(dkey(new Date()),3))+"? Se estiver difícil, me chama que a gente combina."+pixBloco(s.devido||v,p.id,s.ciclo)}
+function msgRecibo(p,pg){const f=finDe(p.id)||{};let t="Recebi teu pagamento de "+brl(pg.valor)+", "+nome1(p)+"! Obrigada 💗";
   if(!f.liberadoEm)t+="\n\nTua planilha fica pronta até *"+fd(addDays(pg.data,7))+"*, e eu te aviso por aqui assim que ela estiver no app.";
   else t+="\n\nTeu plano está em dia até *"+fd(addDays(f.liberadoEm,30*((pg.ciclo||0)+1)))+"*.";return t}
-function msgLiberada(p,Lx){const f=finDe(p.id);const L=Lx||(f&&f.liberadoEm);return p.apelido+", tua planilha está liberada no app! 🎉\n\n"+appUrl()+"\n\nEntra com teu usuário *"+p.login+"*."+(L&&valorPlano(f)?"\n\nTeu ciclo começou em "+fd(L)+", e a próxima renovação é dia *"+fd(addDays(L,30))+"*.":"")+"\n\nBora treinar! 💪"}
+function msgLiberada(p,Lx){const f=finDe(p.id);const L=Lx||(f&&f.liberadoEm);return nome1(p)+", tua planilha está liberada no app! 🎉\n\n"+appUrl()+"\n\nEntra com teu usuário *"+p.login+"*."+(L&&valorPlano(f)?"\n\nTeu ciclo começou em "+fd(L)+", e a próxima renovação é dia *"+fd(addDays(L,30))+"*.":"")+"\n\nBora treinar! 💪"}
 /* janela de mensagem editável antes de abrir o WhatsApp */
 function msgSheet(p,titulo,texto,onSend){const w=contato(p.id);
   sheet('<div class="sheet-top">'+avi(p,52)+'<div style="min-width:0"><span class="eyebrow">'+esc(titulo)+'</span><h3 style="margin-top:4px">'+esc(p.nome)+'</h3></div></div>'
@@ -1395,6 +1397,20 @@ function msgSheet(p,titulo,texto,onSend){const w=contato(p.id);
   const ta=$("#ms-t"),a=$("#ms-wa");const upd=()=>{if(a)a.href=waLink(w,ta.value)};upd();ta.addEventListener("input",upd);
   if(a)a.addEventListener("click",()=>{if(onSend)onSend();setTimeout(closeSheet,300)});
   $("#ms-cp").onclick=async()=>{try{await navigator.clipboard.writeText(ta.value);toast("Mensagem copiada.");if(onSend)onSend()}catch(e){ta.select();toast("Selecione e copie o texto.")}}}
+/* boas-vindas escritas por IA a partir da anamnese; valor e Pix são sempre do sistema */
+function fechoPagamento(p){const f=finDe(p.id),v=valorPlano(f);if(!v)return"";
+  return"\n\nTeu plano: *"+planoNome(f)+"* · "+brl(v)+" a cada 30 dias. O ciclo começa a contar no dia em que a planilha for liberada."+pixBloco(v,p.id,0)+"\n\nAssim que pagares, me manda o *comprovante* aqui que eu já começo a montar! 🚀"}
+async function textoIA(p){if(!useSB||!sb||!sb.functions)return{erro:"indisponivel"};
+  try{const{data,error}=await sb.functions.invoke("boas-vindas",{body:{alunoId:p.id}});
+    if(error){let c="";try{const j=await error.context.json();c=j.error||""}catch(e){}return{erro:c||"falha"}}
+    if(data&&data.texto)return{texto:data.texto};return{erro:"vazio"}}catch(e){return{erro:"falha"}}}
+async function boasVindasIA(p){const marcar=()=>api.update("fin",p.id,{boasVindasEm:dkey(new Date())});
+  sheet('<div class="sheet-top">'+avi(p,52)+'<div style="min-width:0"><span class="eyebrow">Boas-vindas pós-anamnese</span><h3 style="margin-top:4px">'+esc(p.nome)+'</h3></div></div><div class="empty">✍️ Lendo a ficha e escrevendo a mensagem…</div>',"Boas-vindas");
+  const r=await textoIA(p);
+  const ok=!!r.texto;const txt=ok?r.texto.trim()+fechoPagamento(p):msgBoasVindas(p);
+  msgSheet(p,ok?"Boas-vindas pós-anamnese · escrita a partir da ficha":"Boas-vindas pós-anamnese · modelo padrão",txt,marcar);
+  const row=$("#sheet-root .acts-row");if(row&&useSB){const b=document.createElement("button");b.type="button";b.className="btn line";b.textContent=ok?"Escrever outra versão":"Tentar com IA de novo";b.onclick=()=>boasVindasIA(p);row.appendChild(b)}
+  if(!ok)toast(r.erro==="sem_chave"?"A IA ainda não foi ativada. Usei o modelo padrão.":"Não consegui falar com a IA agora. Usei o modelo padrão.")}
 async function marcarAviso(id,ciclo,etapa){const f=finDe(id);if(!f)return;const av=Object.assign({},f.avisos||{});const k="c"+ciclo;av[k]=Array.from(new Set((av[k]||[]).concat([etapa])));await api.update("fin",id,{avisos:av})}
 /* ---------- números do painel ---------- */
 function finMes(ym,hoje){let previsto=0,recebido=0,receber=0;
@@ -1450,7 +1466,7 @@ document.addEventListener("click",async e=>{if(!isCoach())return;const t=e.targe
   if(t.dataset.finpay)return finSheet(t.dataset.finpay,"pay");
   if(t.dataset.finlib)return liberar(t.dataset.finlib,dkey(new Date()));
   const p=pById(t.dataset.id);if(!p)return;const s=finStatus(p.id);
-  if(t.dataset.finmsg==="bv")return msgSheet(p,"Boas-vindas pós-anamnese",msgBoasVindas(p),()=>api.update("fin",p.id,{boasVindasEm:dkey(new Date())}));
+  if(t.dataset.finmsg==="bv")return boasVindasIA(p);
   if(t.dataset.finmsg==="etapa"&&s.etapa)return msgSheet(p,ETAPAS[s.etapa],msgEtapa(p,s),()=>marcarAviso(p.id,s.ciclo,s.etapa));
   if(t.dataset.finmsg==="lib")return msgSheet(p,"Planilha liberada",msgLiberada(p));
   if(t.dataset.finmsg==="recibo"){const pg=pagsDe(p.id).slice(-1)[0];if(pg)return msgSheet(p,"Confirmação de pagamento",msgRecibo(p,pg))}
@@ -1508,7 +1524,7 @@ let anamSub=null;
 function watchAnamnese(){if(!db||anamSub||me()!=="coach")return;anamSub=db.collection("anamnese").onSnapshot(s=>{state.anamnese=s.docs.map(d=>Object.assign({id:d.id},d.data()));soon()},()=>{})}
 const anamDe=id=>state.anamnese.find(a=>a.id===id);
 function appUrl(){return cfg().appUrl||(TGC&&TGC.appUrl)||(useSB?location.origin+location.pathname.replace(/index\.html$/,""):"https://claude.ai/artifact/QFpXYaTzVeLGHvGNf1SR7q")}
-function anamWaLink(p){return waLink(contato(p.id),"Oi, "+p.apelido+"! Para eu montar teus treinos do jeito certo, preciso que tu preenchas tua ficha de anamnese. Leva uns 5 minutos 💗\n\n"+appUrl()+"#anamnese\n\nEntra com teu usuário *"+p.login+"* e tua senha.")}
+function anamWaLink(p){return waLink(contato(p.id),"Oi, "+nome1(p)+"! Para eu montar teus treinos do jeito certo, preciso que tu preenchas tua ficha de anamnese. Leva uns 5 minutos 💗\n\n"+appUrl()+"#anamnese\n\nEntra com teu usuário *"+p.login+"* e tua senha.")}
 function anamBox(p){const a=anamDe(p.id);const feita=a&&a.preenchidoEm;const st=feita?"Preenchida em "+fd(a.preenchidoEm):p.anamneseOk?"Enviada pelo aluno em "+fd(p.anamneseOk):p.anamnesePedida?"Pedida em "+fd(p.anamnesePedida):"Não enviada";
   const l=anamWaLink(p);
   return'<details class="anam"><summary><span>🔒 Ficha de anamnese</span><span class="pill '+(feita||p.anamneseOk?"ok":p.anamnesePedida?"warn":"sky")+'">'+esc(st)+'</span></summary><div class="anam-in">'

@@ -38,7 +38,7 @@ function mk(opts){const persist=!(opts&&opts.auth&&opts.auth.persistSession===fa
   async updateUser({password}){const r=await call({op:'setpw',password});return{data:{},error:r.error||null}}};
  function q(){const st={f:{}};const b={select(){st.sel=1;return b},eq(k,v){st.f[k]=v;return b},maybeSingle(){st.single=1;return b},upsert(row){st.op='upsert';st.row=row;return b},update(o){st.op='update';st.row=o;return b},delete(){st.op='delete';return b},
   then(res,rej){const op=st.op||'select';return call({op,col:st.f.col!=null?st.f.col:st.row&&st.row.col,id:st.f.id!=null?st.f.id:st.row&&st.row.id,data:st.row&&st.row.data}).then(r=>{if(r.error)return{data:null,error:r.error};if(op==='select'&&st.single)return{data:(r.data||[])[0]||null,error:null};if((op==='upsert'||op==='delete')&&!st.sel)return{data:null,error:null};return{data:r.data,error:null}}).then(res,rej)}};return b}
- return{auth,from(){return q()},rpc(name,args){return call({op:'rpc',name,args:args||{}})},channel(){const ch={on(){return ch},subscribe(){return ch}};return ch}}}
+ return{auth,functions:{async invoke(n,o){if(!window.__ia)return{data:null,error:{context:{json:async()=>({error:'sem_chave'})}}};return{data:{texto:'Oi, Ana! Li tua ficha com carinho. Correr 10 km cabe direitinho na tua rotina, e vou cuidar do teu joelho em cada treino.'},error:null}}},from(){return q()},rpc(name,args){return call({op:'rpc',name,args:args||{}})},channel(){const ch={on(){return ch},subscribe(){return ch}};return ch}}}
 window.supabase={createClient:(u,k,o)=>mk(o)};})();`;
 const CONFIG=`window.TG_CONFIG={supabaseUrl:"https://teste.supabase.co",supabaseKey:"chave-teste",dominio:"timedagi.app"};`;
 const types={'.html':'text/html','.js':'text/javascript','.png':'image/png','.jpg':'image/jpeg','.webmanifest':'application/manifest+json'};
@@ -152,6 +152,11 @@ try{
   const code=(bv.match(/000201.*$/m)||[''])[0].trim();
   const crc=s=>{let c=0xFFFF;for(let i=0;i<s.length;i++){c^=s.charCodeAt(i)<<8;for(let j=0;j<8;j++)c=(c&0x8000)?((c<<1)^0x1021)&0xFFFF:(c<<1)&0xFFFF}return c.toString(16).toUpperCase().padStart(4,'0')};
   ok('Pix copia e cola válido (chave +5551997770125, R$ 160,00, CRC confere)',code.includes('0114+5551997770125')&&code.includes('5406160.00')&&crc(code.slice(0,-4))===code.slice(-4),code);
+  ok('Mensagens usam o primeiro nome',bv.startsWith('Oi, Ana!'),bv.slice(0,30));
+  await page.evaluate(()=>{window.__ia=true});await page.click('#sheet-root button.btn.line:last-of-type');await page.waitForFunction(()=>{const t=document.querySelector('#ms-t');return t&&t.value.includes('Li tua ficha')},null,{timeout:5000});
+  const ia=await page.inputValue('#ms-t');
+  ok('Boas-vindas por IA: texto da IA + plano, Pix e comprovante do sistema',ia.startsWith('Oi, Ana! Li tua ficha')&&/Fundador|Atleta/.test(ia)&&/000201/.test(ia)&&/comprovante/.test(ia)&&(await page.textContent('#sheet-root')).includes('Escrever outra versão'),ia);
+  await page.evaluate(()=>{window.__ia=false});
   await page.click('#ms-cp');await page.waitForTimeout(900);
   ok('Enviar marca as boas-vindas como feitas',!!(await sql(`select data->>'boasVindasEm' b from public.docs where col='fin' and id='${an}'`))[0].b);
   await page.evaluate(()=>{document.querySelector('#sheet-root').innerHTML=''});await page.click('#ptabs [data-tab="hoje"]');await page.click('#ptabs [data-tab="fin"]');
