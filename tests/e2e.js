@@ -90,6 +90,18 @@ const ok = (name, cond, extra) => { results.push((cond ? "PASS " : "FAIL ") + na
   ok("Editor já abre com 2 treinos na semana (Seg e Qui)", nA === 2, "A=" + nA);
   const dds = await page.$$eval('[data-letter="A"] .ed-dia .dd', x => x.map(e => e.textContent));
   ok("Cada treino mostra o dia e a data (A1 Seg, A2 Qui)", dds[0].includes("Seg") && dds[1].includes("Qui"), dds.join(" | "));
+  { // início no primeiro dia de treino, não na segunda
+    const seg = await page.inputValue("#ed-i");
+    await page.evaluate(()=>{const i=document.querySelector("#ed-i");const d=new Date(i.value+"T12:00:00");d.setDate(d.getDate()+1);i.value=d.toISOString().slice(0,10);i.dispatchEvent(new Event("change"));});
+    const ini2 = await page.inputValue("#ed-i");
+    const qui = (()=>{const d=new Date(seg+"T12:00:00");d.setDate(d.getDate()+3);return d.toISOString().slice(0,10)})();
+    ok("Data que não é dia de treino (terça) avança para o próximo dia de treino (quinta)", ini2 === qui, seg + " → " + ini2);
+    const dd2 = await page.$$eval('[data-letter="A"] .ed-dia .dd', x => x.map(e => e.textContent));
+    ok("Semana começa na quinta e fecha na quarta: A1 Qui, A2 Seg seguinte", dd2[0].includes("Qui") && dd2[1].includes("Seg"), dd2.join(" | "));
+    ok("Editor mostra o intervalo de cada semana", (await page.textContent("#ed-i-h")).includes("Semana 1:"));
+    ok("Agenda da quinzena começa na quinta", (await page.$eval("#ed-cal .cal-c small", e => e.textContent)) === "Qui");
+    await page.evaluate(v=>{const i=document.querySelector("#ed-i");i.value=v;i.dispatchEvent(new Event("change"));}, seg);
+  }
   ok("Agenda da quinzena mostra os 4 treinos nas datas", (await page.$$("#ed-cal .cal-c.tr")).length === 4);
   const diasA = await page.$$('[data-letter="A"] .ed-dia');
   await (await diasA[0].$('[data-dt="titulo"]')).fill("Superiores");

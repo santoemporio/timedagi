@@ -751,8 +751,12 @@ const EMOJIS=["🦄","🐻","🌸","🔥","⚡","🦊","🌊","🦅","🍓","�
 function randEmoji(){return EMOJIS[Math.floor(Math.random()*EMOJIS.length)]}
 function semanaDe(p){if(p&&Array.isArray(p.semana)&&p.semana.length)return WD_ORDER.filter(d=>p.semana.includes(d));const f=Math.min(7,Math.max(1,Number(p&&p.freq)||2));return({1:[1],2:[1,4],3:[1,3,5],4:[1,2,4,5],5:[1,2,3,4,5],6:[1,2,3,4,5,6],7:WD_ORDER.slice()})[f]}
 const wdOff=d=>(d+6)%7;
+/* datas de treino da semana w (0 ou 1) de uma quinzena que começa em ini (qualquer dia): os dias da agenda do atleta dentro de [ini+7w, ini+7w+6], em ordem */
+function datasSemana(ini,w,ws){const out=[];for(let k=0;k<7;k++){const dt=addDays(ini,w*7+k);if(ws.includes(pd(dt).getDay()))out.push(dt)}return out}
+/* primeiro dia de treino do atleta a partir de uma data (inclusive) */
+function proxTreino(dt,ws){for(let k=0;k<7;k++){const x=addDays(dt,k);if(ws.includes(pd(x).getDay()))return x}return dt}
 function fdw(s){return WD[pd(s).getDay()]+" "+fd(s)}
-function dataSessao(pl,i,p){const d=diasDe(pl)[i];if(d&&d.data)return d.data;const ws=semanaDe(p||pById(pl.alunoId));const wd=ws[i];if(wd==null)return null;return addDays(pl.inicio,(pl.letra==="B"?7:0)+wdOff(wd))}
+function dataSessao(pl,i,p){const d=diasDe(pl)[i];if(d&&d.data)return d.data;const ws=semanaDe(p||pById(pl.alunoId));const wd=ws[i];if(wd==null)return null;return datasSemana(pl.inicio,pl.letra==="B"?1:0,ws)[i]||null}
 const rotL=pl=>pl&&pl.espelho?"A":(pl&&pl.letra)||"A";
 const modoQ=q=>q&&q.B&&q.B.espelho?"A":"AB";
 function ckDia(plId,diaId){return state.checkins.find(k=>k.planoId===plId&&k.diaId===diaId)}
@@ -808,7 +812,7 @@ function renderAll(force){
   if(!ready()){showOnly("load");return}
   const m=me();
   if(!m&&useSB&&authU){const pp=pById(authU.id);sbLogout(pp&&pp.arquivado?"Seu acesso está pausado. Fale com a Gi.":"Seu cadastro não foi encontrado. Fale com a Gi.");return}
-  if(!m){if(sess){sess=null;LS.del("tg_sess3")}showOnly("gate");$("#cfg-warn").hidden=!((TGC||window.supabase)&&state.mode==="local");$("#foot").textContent="Time da Gi · zooei! × Coach Gi · versão 13";return}
+  if(!m){if(sess){sess=null;LS.del("tg_sess3")}showOnly("gate");$("#cfg-warn").hidden=!((TGC||window.supabase)&&state.mode==="local");$("#foot").textContent="Time da Gi · zooei! × Coach Gi · versão 14";return}
   watchFin();if(m==="coach"){watchContatos();watchAnamnese()}
   if(view==="eu"&&m==="coach")view="painel";
   if(view==="painel"&&m!=="coach")view="mural";
@@ -1108,11 +1112,11 @@ function exLib(){const set=new Set(["Agachamento livre","Agachamento goblet","Af
 function blankDia(){return{titulo:"",foco:"",exs:[{nome:"",series:"3",reps:"10",carga:"",descanso:"60s",obs:""}]}}
 function editor(p,q){
   const base=edMode==="new"?null:q;const ciclo=edMode==="next"?q.ciclo+1:edMode==="cur"?q.ciclo:1;
-  const ini=edMode==="next"?addDays(q.inicio,14):edMode==="cur"?q.inicio:dkey(monday(new Date()));
+  const ini=edMode==="next"?addDays(q.inicio,14):edMode==="cur"?q.inicio:proxTreino(addDays(dkey(new Date()),1),semanaDe(p));
   const ws=semanaDe(p);const modo0=base?modoQ(base):"AB";
   const letra=L=>{const x=base&&base[L];const dias=x?diasDe(x).slice():[];while(dias.length<ws.length)dias.push(blankDia());if(!dias.length)dias.push(blankDia());
     return'<div class="ed-letter" data-letter="'+L+'"'+(L==="B"?" hidden":"")+'><div class="ed-dias">'+dias.map((d,i)=>diaCard(L,i,d)).join("")+'</div><div class="ed-tools"><button type="button" class="btn ghost sm" data-adddia="'+L+'">+ Treino extra na semana</button>'+(L==="B"?'<button type="button" class="btn line sm" id="copy-ab">Copiar Treino A para o B</button>':"")+'</div></div>'};
-  return'<form id="ed-form" style="display:grid;gap:14px"><div class="form-grid"><div class="field"><label for="ed-c">Quinzena nº</label><input class="input num" id="ed-c" type="number" min="1" value="'+ciclo+'"></div><div class="field"><label for="ed-i">Começa na segunda-feira</label><input class="input" id="ed-i" type="date" value="'+ini+'"></div></div>'
+  return'<form id="ed-form" style="display:grid;gap:14px"><div class="form-grid"><div class="field"><label for="ed-c">Quinzena nº</label><input class="input num" id="ed-c" type="number" min="1" value="'+ciclo+'"></div><div class="field"><label for="ed-i">Primeiro dia de treino</label><input class="input" id="ed-i" type="date" value="'+ini+'"><small class="muted" id="ed-i-h"></small></div></div>'
    +(edMode==="next"?'<p class="banner" style="display:block">Copiei a quinzena '+q.ciclo+'. Ajuste só o que mudou: carga, volume ou uma observação. O aluno vê uma etiqueta em cada ajuste.</p>':"")
    +'<div><span class="lbl">Agenda da quinzena · '+esc(p.apelido)+' treina '+esc(ws.map(d=>WD[d]).join(", "))+'</span><div id="ed-cal" style="margin-top:8px"></div></div>'
    +'<div class="field"><span class="lbl">Modelo da quinzena</span><div class="seg" id="ed-modo" role="radiogroup" aria-label="Modelo da quinzena" data-modo="'+modo0+'"><button type="button" role="radio" data-modo="AB" aria-checked="'+(modo0==="AB")+'"'+(modo0==="AB"?' class="on"':"")+'>Treino A e B</button><button type="button" role="radio" data-modo="A" aria-checked="'+(modo0==="A")+'"'+(modo0==="A"?' class="on"':"")+'>Só Treino A</button></div><small class="muted" id="ed-modo-h">'+(modo0==="A"?"O Treino A se repete nas duas semanas.":"Semana 1 com o Treino A e semana 2 com o Treino B.")+'</small></div>'
@@ -1140,10 +1144,10 @@ const edModo=f=>{const m=f.querySelector("#ed-modo");return m&&m.dataset.modo===
 function setModo(f,m){const box=f.querySelector("#ed-modo");box.dataset.modo=m;box.querySelectorAll("[data-modo]").forEach(b=>{const on=b.dataset.modo===m;b.classList.toggle("on",on);b.setAttribute("aria-checked",on)});
   f.querySelector("#ed-modo-h").textContent=m==="A"?"O Treino A se repete nas duas semanas.":"Semana 1 com o Treino A e semana 2 com o Treino B.";
   f.querySelector("#ed-tabs").hidden=m==="A";if(m==="A"){f.querySelectorAll("[data-edl]").forEach(x=>x.classList.toggle("on",x.dataset.edl==="A"));f.querySelectorAll("[data-letter]").forEach(x=>x.hidden=x.dataset.letter!=="A")}relabel(f)}
-function relabel(f){const p=pById(selAluno);const ws=semanaDe(p);let ini=$("#ed-i").value;if(!ini)return;
+function relabel(f){const p=pById(selAluno);const ws=semanaDe(p);let ini=$("#ed-i").value;if(!ini)return;const D0=datasSemana(ini,0,ws),D1=datasSemana(ini,1,ws);{const h=$("#ed-i-h");if(h)h.textContent="Semana 1: "+fd(ini)+" a "+fd(addDays(ini,6))+" · Semana 2: "+fd(addDays(ini,7))+" a "+fd(addDays(ini,13))}
   const modo=edModo(f);const sess=[];
-  if(modo==="A")f.querySelectorAll('[data-letter="A"] .ed-dia').forEach((c,i)=>{const wd=ws[i];if(wd==null)return;sess.push({L:"B",R:"A",i,dia:{id:"d"+(i+1)},data:addDays(ini,7+wdOff(wd)),ck:null})});
-  ["A","B"].forEach(L=>{if(modo==="A"&&L==="B")return;f.querySelectorAll('[data-letter="'+L+'"] .ed-dia').forEach((c,i)=>{c.querySelector(".dn").textContent=i+1;const wd=ws[i];const dt=wd==null?null:addDays(ini,(L==="B"?7:0)+wdOff(wd));
+  if(modo==="A")f.querySelectorAll('[data-letter="A"] .ed-dia').forEach((c,i)=>{const wd=ws[i];if(wd==null||!D1[i])return;sess.push({L:"B",R:"A",i,dia:{id:"d"+(i+1)},data:D1[i],ck:null})});
+  ["A","B"].forEach(L=>{if(modo==="A"&&L==="B")return;f.querySelectorAll('[data-letter="'+L+'"] .ed-dia').forEach((c,i)=>{c.querySelector(".dn").textContent=i+1;const wd=ws[i];const dt=wd==null?null:((L==="B"?D1:D0)[i]||null);
     c.querySelector(".dd").textContent=dt?"· "+fdw(dt):"· extra, sem dia na agenda";c.classList.toggle("extra",!dt);
     if(dt)sess.push({L,R:L,i,dia:{id:"d"+(i+1),titulo:c.querySelector('[data-dt="titulo"]').value},data:dt,ck:null})})});
   $("#ed-cal").innerHTML=calHtml(ini,sess)}
@@ -1152,7 +1156,7 @@ function bindTreinos(){
   const b=(id,m)=>{const x=$(id);if(x)x.onclick=()=>{edMode=m;renderPainel()}};b("#ed-next","next");b("#ed-cur","cur");b("#ed-new","new");
   const f=$("#ed-form");if(!f){edOpen=false;return}
   relabel(f);
-  $("#ed-i").addEventListener("change",()=>{const v=$("#ed-i").value;if(v){const m=dkey(monday(pd(v)));if(m!==v){$("#ed-i").value=m;toast("A quinzena começa sempre na segunda: ajustei para "+fd(m)+".")}}relabel(f)});
+  $("#ed-i").addEventListener("change",()=>{const v=$("#ed-i").value;if(v){const ws0=semanaDe(pById(selAluno));const m=proxTreino(v,ws0);if(m!==v){$("#ed-i").value=m;toast(fdw(v)+" não é dia de treino: a quinzena começa no próximo, "+fdw(m)+".")}}relabel(f)});
   f.addEventListener("click",e=>{
     const mo=e.target.closest("[data-modo]");if(mo){setModo(f,mo.dataset.modo);return}
     const t=e.target.closest("[data-edl]");if(t){f.querySelectorAll("[data-edl]").forEach(x=>x.classList.toggle("on",x===t));f.querySelectorAll("[data-letter]").forEach(x=>x.hidden=x.dataset.letter!==t.dataset.edl);return}
@@ -1170,9 +1174,9 @@ function bindTreinos(){
     const modo=edModo(f);const out=[];for(const L of(modo==="A"?["A"]:["A","B"])){const dias=lerLetra(f,L);const vazio=dias.findIndex(d=>!d.exs.length);
       if(vazio>=0){toast("O treino "+L+(vazio+1)+" precisa de pelo menos um exercício.");f.querySelector('[data-edl="'+L+'"]').click();return}
       for(const[di,d]of dias.entries()){const t=d.exs.find(x=>x.tipo==="tabata"&&x.faltam);if(t){toast("Treino "+L+(di+1)+": preencha todos os movimentos do Tabata ("+(t.movs.length)+").");f.querySelector('[data-edl="'+L+'"]').click();return}d.exs.forEach(x=>delete x.faltam)}
-      dias.forEach((d,i)=>{if(!d.titulo)d.titulo="Treino "+L+(i+1);const wd=ws[i];d.data=wd==null?"":addDays(ini,(L==="B"?7:0)+wdOff(wd))});
+      dias.forEach((d,i)=>{if(!d.titulo)d.titulo="Treino "+L+(i+1);const wd=ws[i];d.data=wd==null?"":(datasSemana(ini,L==="B"?1:0,ws)[i]||"")});
       out.push({id:safeId(p.id+"-c"+ciclo+L),alunoId:p.id,ciclo,inicio:ini,letra:L,modo,dias})}
-    if(modo==="A"){const a=out[0];out.push({id:safeId(p.id+"-c"+ciclo+"B"),alunoId:p.id,ciclo,inicio:ini,letra:"B",modo,espelho:true,dias:a.dias.map((d,i)=>{const wd=ws[i];return Object.assign(JSON.parse(JSON.stringify(d)),{data:wd==null?"":addDays(ini,7+wdOff(wd))})})})}
+    if(modo==="A"){const a=out[0];out.push({id:safeId(p.id+"-c"+ciclo+"B"),alunoId:p.id,ciclo,inicio:ini,letra:"B",modo,espelho:true,dias:a.dias.map((d,i)=>{const wd=ws[i];return Object.assign(JSON.parse(JSON.stringify(d)),{data:wd==null?"":(datasSemana(ini,1,ws)[i]||"")})})})}
     for(const o of out){if(!await api.set("planos",o.id,o))return}
     edMode=null;edOpen=false;toast("Quinzena "+ciclo+" publicada para "+p.apelido+".");renderPainel()}}
 
@@ -1310,7 +1314,7 @@ async function criarExemplos(){
     await api.set("perfis",id,Object.assign({nome,apelido,login,emoji,foto:"",turma,semana,freq,objetivoMural:om,objetivo:ob,metas,arquivado:false,exemplo:true,criado:new Date().toISOString()},useSB?{}:{senhaHash:passHash("1234",login)}));
     const pool=DIAS[tpl];
     for(let c=1;c<=2;c++){const ini=addDays(cur,-14*(2-c)-(ix===1?7:0));
-      for(const L of["A","B"]){const dias=Array.from({length:freq},(_,i)=>{const t=pool[(i+(L==="B"?1:0))%pool.length];return{id:"d"+(i+1),data:addDays(ini,(L==="B"?7:0)+wdOff(semana[i])),titulo:t[0],foco:t[1],exs:t[2].map((e,j)=>({id:"e"+(j+1),nome:e[0],series:e[1],reps:e[2],carga:bump(e[3],c===2&&j===0?1:0),descanso:e[4],obs:e[5],tipo:e[6]||"",...(e[6]==="tabata"?{movs:[{nome:"Burpee",carga:""},{nome:"Kettlebell swing",carga:"12 kg"}]}:{})}))}});
+      for(const L of["A","B"]){const dias=Array.from({length:freq},(_,i)=>{const t=pool[(i+(L==="B"?1:0))%pool.length];return{id:"d"+(i+1),data:datasSemana(ini,L==="B"?1:0,WD_ORDER.filter(d=>semana.includes(d)))[i]||"",titulo:t[0],foco:t[1],exs:t[2].map((e,j)=>({id:"e"+(j+1),nome:e[0],series:e[1],reps:e[2],carga:bump(e[3],c===2&&j===0?1:0),descanso:e[4],obs:e[5],tipo:e[6]||"",...(e[6]==="tabata"?{movs:[{nome:"Burpee",carga:""},{nome:"Kettlebell swing",carga:"12 kg"}]}:{})}))}});
         const pid=id+"-c"+c+L;await api.set("planos",pid,{alunoId:id,ciclo:c,inicio:ini,letra:L,dias,exemplo:true});
         for(const d of dias){const day=d.data;if(day>=today||(ix===0&&c===2))continue;const ts=pd(day);ts.setHours(7+ix*5,10);
           const exs={};d.exs.forEach(e=>{exs[e.id]={feito:true,carga:/kg/.test(e.carga)?e.carga:"",nota:""}});
