@@ -12,7 +12,7 @@ window.claude={use:async n=>n==="db"?{doc,collection:col}:null};})();`;
 const results = [];
 const ok = (name, cond, extra) => { results.push((cond ? "PASS " : "FAIL ") + name + (extra ? " — " + extra : "")); };
 (async () => {
-  const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" in {} ? undefined : undefined });
+  const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined });
   const ctx = await browser.newContext({ viewport: { width: 400, height: 860 } });
   const page = await ctx.newPage();
   const errs = [];
@@ -135,6 +135,20 @@ const ok = (name, cond, extra) => { results.push((cond ? "PASS " : "FAIL ") + na
 
   await page.click("#ed-next"); await page.click('#ed-form button[type="submit"]'); await page.waitForTimeout(200);
   ok("Quinzena 3 fica agendada (futura) para a coach", (await page.textContent("#painel")).includes("agendada"));
+  // 6b. Modelo "Só Treino A": semana 2 repete o A
+  await page.click("#ed-cur"); await page.waitForSelector("#ed-form");
+  ok("Editor oferece o modelo da quinzena (A e B / Só A)", !!(await page.$('#ed-modo [data-modo="A"]')) && (await page.getAttribute("#ed-modo", "data-modo")) === "AB");
+  await page.click('#ed-modo [data-modo="A"]');
+  ok("Só Treino A esconde as abas e o Treino B", await page.isHidden("#ed-tabs") && await page.isHidden('[data-letter="B"]'));
+  ok("Prévia da agenda mostra o A também na semana 2", (await page.textContent("#ed-cal")).includes("Semana 2 · Treino A"));
+  await page.click('#ed-form button[type="submit"]'); await page.waitForTimeout(250);
+  { const st3 = await store(); const ks = Object.keys(st3).filter(k => k.startsWith("planos/") && st3[k].ciclo === 3);
+    const A3 = ks.map(k => st3[k]).find(x => x.letra === "A"), B3 = ks.map(k => st3[k]).find(x => x.letra === "B");
+    ok("Só A grava a semana 2 como espelho do A, com datas +7 dias", A3 && B3 && B3.espelho === true && A3.modo === "A" && B3.dias.length === A3.dias.length && B3.dias[0].exs.length === A3.dias[0].exs.length && B3.dias[0].data === (()=>{const d=new Date(A3.dias[0].data+"T12:00:00");d.setDate(d.getDate()+7);return d.toISOString().slice(0,10)})(), JSON.stringify([A3&&A3.dias[0].data,B3&&B3.dias[0].data]));
+    ok("Painel mostra o modelo e a semana 2 com A1", (await page.textContent("#painel")).includes("Só Treino A") && (await page.textContent("#painel")).includes("Semana 2 · Treino A") && !(await page.textContent("#painel .cal")).includes("B1")); }
+  await page.click("#ed-cur"); ok("Ao reabrir, o editor lembra o modelo Só A", (await page.getAttribute("#ed-modo", "data-modo")) === "A");
+  await page.click('#ed-modo [data-modo="AB"]'); ok("Voltar para A e B mostra o Treino B de novo", !(await page.isHidden("#ed-tabs")));
+  await page.click("#ed-cancel");
   // 7. logout, login aluno
   await page.click("#nav-sair");
   await page.fill("#lg-user", "pablo"); await page.fill("#lg-pass", "4321"); await page.click("#lg-btn");

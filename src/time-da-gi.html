@@ -753,14 +753,17 @@ function semanaDe(p){if(p&&Array.isArray(p.semana)&&p.semana.length)return WD_OR
 const wdOff=d=>(d+6)%7;
 function fdw(s){return WD[pd(s).getDay()]+" "+fd(s)}
 function dataSessao(pl,i,p){const d=diasDe(pl)[i];if(d&&d.data)return d.data;const ws=semanaDe(p||pById(pl.alunoId));const wd=ws[i];if(wd==null)return null;return addDays(pl.inicio,(pl.letra==="B"?7:0)+wdOff(wd))}
+const rotL=pl=>pl&&pl.espelho?"A":(pl&&pl.letra)||"A";
+const modoQ=q=>q&&q.B&&q.B.espelho?"A":"AB";
 function ckDia(plId,diaId){return state.checkins.find(k=>k.planoId===plId&&k.diaId===diaId)}
-function sessoesQ(q,p){const out=[];["A","B"].forEach(L=>{const pl=q[L];if(!pl)return;diasDe(pl).forEach((d,i)=>out.push({L,i,pl,dia:d,data:dataSessao(pl,i,p),ck:ckDia(pl.id,d.id)}))});return out}
+function sessoesQ(q,p){const out=[];["A","B"].forEach(L=>{const pl=q[L];if(!pl)return;diasDe(pl).forEach((d,i)=>out.push({L,R:rotL(pl),i,pl,dia:d,data:dataSessao(pl,i,p),ck:ckDia(pl.id,d.id)}))});return out}
 function calHtml(ini,sess,opts){opts=opts||{};const hoje=dkey(new Date());const map={};sess.forEach(s=>{if(s.data&&!map[s.data])map[s.data]=s});
   let h='<div class="cal" role="group" aria-label="Agenda da quinzena">';
-  for(let w=0;w<2;w++){h+='<span class="cal-w">Semana '+(w+1)+' · Treino '+(w?"B":"A")+'</span>';
+  const wR=w=>{const x=sess.find(s=>s.L===(w?"B":"A"));return x&&x.R?x.R:(w?"B":"A")};
+  for(let w=0;w<2;w++){h+='<span class="cal-w">Semana '+(w+1)+' · Treino '+wR(w)+'</span>';
     for(let k=0;k<7;k++){const dt=addDays(ini,w*7+k),s=map[dt];const cls=["cal-c"];if(s)cls.push("tr");if(s&&s.ck)cls.push("done");if(dt===hoje)cls.push("today");if(s&&opts.sel&&opts.sel===s.L+s.dia.id)cls.push("sel");if(!s)cls.push("rest");
-      const inner='<small>'+WD[pd(dt).getDay()]+'</small><b>'+pd(dt).getDate()+'</b><i>'+(s?(s.ck?"✓ ":"")+s.L+(s.i+1):"–")+'</i>';
-      h+=(s&&opts.click)?'<button type="button" class="'+cls.join(" ")+'" data-cal="'+s.L+'|'+esc(s.dia.id)+'" aria-label="'+esc(s.L+(s.i+1)+", "+fdw(dt)+(s.ck?", feito":""))+'">'+inner+'</button>':'<div class="'+cls.join(" ")+'">'+inner+'</div>'}}
+      const inner='<small>'+WD[pd(dt).getDay()]+'</small><b>'+pd(dt).getDate()+'</b><i>'+(s?(s.ck?"✓ ":"")+(s.R||s.L)+(s.i+1):"–")+'</i>';
+      h+=(s&&opts.click)?'<button type="button" class="'+cls.join(" ")+'" data-cal="'+s.L+'|'+esc(s.dia.id)+'" aria-label="'+esc((s.R||s.L)+(s.i+1)+", "+fdw(dt)+(s.ck?", feito":""))+'">'+inner+'</button>':'<div class="'+cls.join(" ")+'">'+inner+'</div>'}}
   return h+'</div>'}
 
 function prevDia(pl,idx){const pv=state.planos.find(p=>p.alunoId===pl.alunoId&&Number(p.ciclo)===Number(pl.ciclo)-1&&p.letra===pl.letra);return pv&&diasDe(pv)[idx]}
@@ -805,7 +808,7 @@ function renderAll(force){
   if(!ready()){showOnly("load");return}
   const m=me();
   if(!m&&useSB&&authU){const pp=pById(authU.id);sbLogout(pp&&pp.arquivado?"Seu acesso está pausado. Fale com a Gi.":"Seu cadastro não foi encontrado. Fale com a Gi.");return}
-  if(!m){if(sess){sess=null;LS.del("tg_sess3")}showOnly("gate");$("#cfg-warn").hidden=!((TGC||window.supabase)&&state.mode==="local");$("#foot").textContent="Time da Gi · zooei! × Coach Gi · versão 12";return}
+  if(!m){if(sess){sess=null;LS.del("tg_sess3")}showOnly("gate");$("#cfg-warn").hidden=!((TGC||window.supabase)&&state.mode==="local");$("#foot").textContent="Time da Gi · zooei! × Coach Gi · versão 13";return}
   watchFin();if(m==="coach"){watchContatos();watchAnamnese()}
   if(view==="eu"&&m==="coach")view="painel";
   if(view==="painel"&&m!=="coach")view="mural";
@@ -977,10 +980,10 @@ function renderEu(){
   const cur=ss.find(s=>s.L+s.dia.id===abaSel);
   const head='<div class="plan-head"><div><span class="eyebrow">Quinzena '+q.ciclo+' · '+fd(q.inicio)+' a '+fd(q.fim)+'</span><h2>Sua planilha</h2></div><span class="pill '+(sessoes(p.id,q.ciclo)>=t?"ok":"sky")+'">'+sessoes(p.id,q.ciclo)+"/"+t+' treinos</span></div>'
    +calHtml(q.inicio,ss,{click:true,sel:abaSel})
-   +'<div class="dias">'+ss.map(s=>'<button class="dia-chip'+(s.L+s.dia.id===abaSel?" on":"")+(s.ck?" ok":"")+(s.data===hoje?" hj":"")+'" data-sel="'+esc(s.L+s.dia.id)+'"><b>'+s.L+(s.i+1)+' · '+esc(s.dia.titulo||"Treino")+'</b><span>'+(s.data?(s.data===hoje?"Hoje · ":"")+fdw(s.data):"Sem data")+(s.ck?" · ✓ feito":"")+'</span></button>').join("")+'</div>';
+   +'<div class="dias">'+ss.map(s=>'<button class="dia-chip'+(s.L+s.dia.id===abaSel?" on":"")+(s.ck?" ok":"")+(s.data===hoje?" hj":"")+'" data-sel="'+esc(s.L+s.dia.id)+'"><b>'+s.R+(s.i+1)+' · '+esc(s.dia.titulo||"Treino")+'</b><span>'+(s.data?(s.data===hoje?"Hoje · ":"")+fdw(s.data):"Sem data")+(s.ck?" · ✓ feito":"")+'</span></button>').join("")+'</div>';
   if(!cur){P.innerHTML=anamCta+head;bindCta();return}
   const pl=cur.pl,dia=cur.dia,idx=cur.i,ck=cur.ck;const pd0=prevDia(pl,idx);
-  let body='<div><span class="eyebrow">'+(cur.data?(cur.data===hoje?"Hoje · ":"")+fdw(cur.data):"Sem data definida")+'</span><h3 style="font-size:28px">'+esc(pl.letra)+(idx+1)+' · '+esc(dia.titulo||"Treino")+'</h3><p class="foco">'+esc(dia.foco||"")+'</p></div>';
+  let body='<div><span class="eyebrow">'+(cur.data?(cur.data===hoje?"Hoje · ":"")+fdw(cur.data):"Sem data definida")+'</span><h3 style="font-size:28px">'+esc(rotL(pl))+(idx+1)+' · '+esc(dia.titulo||"Treino")+'</h3><p class="foco">'+esc(dia.foco||"")+'</p></div>';
   if(ck){const h=HUMOR.find(x=>x[0]===Number(ck.humor));
     body+='<div class="done-banner"><b>✓ Treino finalizado</b><span>'+esc(fdw(dkey(ck.ts)))+(h?" · "+h[1]+" "+h[2]:"")+" · esforço "+esc(ck.rpe)+'/10'+(ck.duracao?" · "+ck.duracao+" min":"")+'</span><small>Finalizou, acabou. Bora para o próximo!</small></div>'
       +'<div class="exs">'+(dia.exs||[]).map(e=>exRow(e,(ck.exs&&ck.exs[e.id])||{},{locked:true,ch:mudanca(e,pd0)})).join("")+'</div>';
@@ -1006,7 +1009,7 @@ function fmtKg(v){return String(Math.round(v*10)/10).replace(".",",")+" kg"}
 function spark(v){const w=90,h=26,mn=Math.min(...v),mx=Math.max(...v),r=mx-mn||1;const pts=v.map((x,i)=>[(i/(v.length-1))*(w-6)+3,h-3-((x-mn)/r)*(h-6)]);
   return'<svg viewBox="0 0 '+w+' '+h+'" width="'+w+'" height="'+h+'" aria-hidden="true"><polyline points="'+pts.map(p=>p.join(",")).join(" ")+'" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="'+pts[pts.length-1][0]+'" cy="'+pts[pts.length-1][1]+'" r="3" fill="var(--pink)"/></svg>'}
 function finishSheet(p,q,pl,dia,durMin){if(ckDia(pl.id,dia.id)){toast("Esse treino já foi finalizado. Bora para o próximo!");return}const d=getDraft(pl.id,dia.id);const feitos=(dia.exs||[]).filter(e=>d.exs[e.id]&&d.exs[e.id].feito).length;let humor=4,foto="";
-  sheet('<div class="sheet-top"><div><span class="eyebrow">Treino '+esc(pl.letra)+' · '+esc(dia.titulo||"")+'</span><h3 style="margin-top:4px">Como foi o treino?</h3><p class="muted small">'+feitos+' de '+(dia.exs||[]).length+' exercícios marcados</p></div><button class="x" id="sx" aria-label="Fechar">×</button></div>'
+  sheet('<div class="sheet-top"><div><span class="eyebrow">Treino '+esc(rotL(pl))+' · '+esc(dia.titulo||"")+'</span><h3 style="margin-top:4px">Como foi o treino?</h3><p class="muted small">'+feitos+' de '+(dia.exs||[]).length+' exercícios marcados</p></div><button class="x" id="sx" aria-label="Fechar">×</button></div>'
    +'<div class="humor" id="humor">'+HUMOR.map(h=>'<button type="button" data-h="'+h[0]+'" class="'+(h[0]===humor?"on":"")+'">'+h[1]+'<span>'+h[2]+'</span></button>').join("")+'</div>'
    +'<div class="field"><label for="f-rpe">Esforço percebido</label><div class="rpe"><input type="range" id="f-rpe" min="1" max="10" value="7"><b id="f-rpe-v">7/10</b></div></div>'
    +'<div class="field"><label for="f-dur">Duração (min)</label><input class="input num" id="f-dur" type="number" min="1" max="240" value="'+(durMin||50)+'"></div>'
@@ -1022,7 +1025,7 @@ function finishSheet(p,q,pl,dia,durMin){if(ckDia(pl.id,dia.id)){toast("Esse trei
   $("#f-save").onclick=async()=>{const exs={};(dia.exs||[]).forEach(e=>{const s=d.exs[e.id]||{};exs[e.id]={feito:!!s.feito,carga:s.carga||"",nota:s.nota||""}});
     if(ckDia(pl.id,dia.id)){closeSheet();toast("Esse treino já foi finalizado.");return}
     $("#f-save").disabled=true;
-    const ok=await api.add("checkins",{alunoId:p.id,planoId:pl.id,diaId:dia.id,ciclo:Number(q.ciclo),letra:pl.letra,ts:new Date().toISOString(),humor,rpe:Number($("#f-rpe").value),duracao:Number($("#f-dur").value)||0,mensagem:$("#f-msg").value.trim().slice(0,140),foto,comentario:$("#f-com").value.trim().slice(0,300),publico:true,exs});
+    const ok=await api.add("checkins",{alunoId:p.id,planoId:pl.id,diaId:dia.id,ciclo:Number(q.ciclo),letra:rotL(pl),ts:new Date().toISOString(),humor,rpe:Number($("#f-rpe").value),duracao:Number($("#f-dur").value)||0,mensagem:$("#f-msg").value.trim().slice(0,140),foto,comentario:$("#f-com").value.trim().slice(0,300),publico:true,exs});
     if(ok){LS.del(draftKey(pl.id,dia.id));abertos=new Set();{const me0=pl.letra+dia.id;const ss=sessoesQ(q,p);const i0=ss.findIndex(x=>x.L+x.dia.id===me0);const nx=ss.slice(i0+1).find(x=>!x.ck)||ss.find(x=>!x.ck&&x.L+x.dia.id!==me0);abaSel=nx?nx.L+nx.dia.id:me0}closeSheet();toast("Treino salvo! A Gi já recebeu seu feedback.");renderAll(true)}else $("#f-save").disabled=false}}
 function photoSheet(p){let foto=okImg(p.foto)?p.foto:"";
   sheet('<div class="sheet-top"><div><span class="eyebrow">Seu perfil no time</span><h3 style="margin-top:4px">Foto de perfil</h3></div><button class="x" id="sx" aria-label="Fechar">×</button></div>'
@@ -1066,7 +1069,7 @@ function pHoje(){const hoje=dkey(new Date());
   if(!ativos().length)return'<div class="card" style="max-width:560px"><h2>Bem-vinda, Gi</h2><p>Comece cadastrando seus alunos. Cada um recebe um usuário e uma senha que você define.</p><div class="acts-row"><button class="btn" data-tabgo="alunos">Cadastrar aluno</button><button class="btn line" data-tabgo="ajustes">Criar alunos de teste</button></div></div>';
   return'<div class="pgrid"><div style="display:grid;gap:18px">'
    +'<div class="card"><h2>Treinos de hoje</h2><p class="muted small">'+esc(fdw(hoje))+' · quem tem treino marcado hoje.</p><div style="display:grid;gap:8px">'
-   +(hojeLista.length?hojeLista.map(({p,s})=>'<div class="row-p">'+avi(p,40)+'<div class="nm"><button class="linkbtn" style="color:var(--ink);font-size:14px" data-perfil="'+esc(p.id)+'">'+esc(p.nome)+'</button><small>'+s.L+(s.i+1)+' · '+esc(s.dia.titulo||"Treino")+'</small></div><span class="pill '+(s.ck?"ok":"sky")+'">'+(s.ck?"✓ feito":"a fazer")+'</span></div>').join(""):'<div class="empty">Nenhum treino marcado para hoje.</div>')
+   +(hojeLista.length?hojeLista.map(({p,s})=>'<div class="row-p">'+avi(p,40)+'<div class="nm"><button class="linkbtn" style="color:var(--ink);font-size:14px" data-perfil="'+esc(p.id)+'">'+esc(p.nome)+'</button><small>'+s.R+(s.i+1)+' · '+esc(s.dia.titulo||"Treino")+'</small></div><span class="pill '+(s.ck?"ok":"sky")+'">'+(s.ck?"✓ feito":"a fazer")+'</span></div>').join(""):'<div class="empty">Nenhum treino marcado para hoje.</div>')
    +'</div></div><div class="card"><h2>Precisam de um toque</h2><p class="muted small">Sem treino registrado há 4 dias ou mais. Um áudio seu agora vale mais que qualquer post.</p><div style="display:grid;gap:8px">'
    +(parados.length?parados.map(r=>{const l=waLink(contato(r.p.id),"Oi, "+nome1(r.p)+"! Tudo certo? Senti sua falta no treino. Bora retomar essa semana? 💗");
      return'<div class="row-p">'+avi(r.p,40)+'<div class="nm"><button class="linkbtn" style="color:var(--ink);font-size:14px" data-perfil="'+esc(r.p.id)+'">'+esc(r.p.nome)+'</button><small>'+(r.dias==null?"Nenhum treino registrado":r.dias+" dias sem treinar")+'</small></div>'+(l?'<a class="btn wa sm" href="'+esc(l)+'" target="_blank" rel="noopener">WhatsApp</a>':'<button class="btn line sm" data-editaluno="'+esc(r.p.id)+'">+ WhatsApp</button>')+'</div>'}).join(""):'<div class="empty">Todo mundo treinou nos últimos dias.</div>')
@@ -1095,9 +1098,10 @@ function pTreinos(){
   h+='<div class="acts-row">'+(q?'<button class="btn" id="ed-next">Montar quinzena '+(q.ciclo+1)+' (copia a atual)</button><button class="btn line" id="ed-cur">Editar quinzena '+q.ciclo+'</button>':'<button class="btn" id="ed-new">Criar primeira quinzena</button>')+'</div>';
   if(q){h+='<p class="muted small">Quinzena '+q.ciclo+' · '+fd(q.inicio)+' a '+fd(q.fim)+(q.futura?' · <b>agendada</b>: o aluno vê a partir de '+fd(q.inicio)+(qa&&qa.ciclo!==q.ciclo?" (hoje ele está na quinzena "+qa.ciclo+")":""):' · Meta de '+2*freqDe(p)+' treinos, feitos '+sessoes(p.id,q.ciclo))+'.</p>'
     +calHtml(q.inicio,sessoesQ(q,p))
-    +'<div class="ed-cols">'+["A","B"].map(L=>{const x=q[L];if(!x)return'<div class="ed-col"><h3>Treino '+L+'</h3><p class="muted">Não publicado</p></div>';const cks=state.checkins.filter(k=>k.planoId===x.id);
-    return'<div class="ed-col"><div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><h3>Treino '+L+'</h3><span class="pill sky">'+cks.length+' sessões</span></div>'+diasDe(x).map((d,i)=>{const ck=cks.find(k=>k.diaId===d.id);const dt=dataSessao(x,i,p);
-      return'<div><strong>'+L+(i+1)+' · '+esc(d.titulo)+'</strong> <span class="muted small">'+(dt?esc(fdw(dt)):"sem data")+' · '+(ck?"✓ feito":"a fazer")+'</span><div class="scroll-x"><table class="tbl"><thead><tr><th>Exercício</th><th>Prescrição</th><th>Feito</th></tr></thead><tbody>'
+    +'<p class="muted small">Modelo: <b>'+(modoQ(q)==="A"?"Só Treino A (repete na semana 2)":"Treino A e B")+'</b></p>'
+    +'<div class="ed-cols">'+["A","B"].map(L=>{const x=q[L];if(!x)return'<div class="ed-col"><h3>Treino '+L+'</h3><p class="muted">Não publicado</p></div>';const cks=state.checkins.filter(k=>k.planoId===x.id);const tt=x.espelho?"Semana 2 · Treino A de novo":(modoQ(q)==="A"?"Semana 1 · Treino A":"Treino "+L);
+    return'<div class="ed-col"><div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><h3>'+tt+'</h3><span class="pill sky">'+cks.length+' sessões</span></div>'+diasDe(x).map((d,i)=>{const ck=cks.find(k=>k.diaId===d.id);const dt=dataSessao(x,i,p);
+      return'<div><strong>'+rotL(x)+(i+1)+' · '+esc(d.titulo)+'</strong> <span class="muted small">'+(dt?esc(fdw(dt)):"sem data")+' · '+(ck?"✓ feito":"a fazer")+'</span><div class="scroll-x"><table class="tbl"><thead><tr><th>Exercício</th><th>Prescrição</th><th>Feito</th></tr></thead><tbody>'
       +(d.exs||[]).map(e=>{const f=ck&&ck.exs&&ck.exs[e.id]&&ck.exs[e.id].feito;return'<tr><td>'+esc(e.tipo==="tabata"?"Tabata · "+movsDe(e).join(" / "):e.nome)+'</td><td class="num">'+esc(e.tipo==="tabata"?"8 × 20s/10s":[e.series&&e.reps?e.series+"×"+e.reps:e.reps,e.carga].filter(Boolean).join(" · "))+'</td><td>'+(ck?(f?"✓":"–"):"")+'</td></tr>'}).join("")+'</tbody></table></div></div>'}).join("")+'</div>'}).join("")+'</div>'}
   return h+'</div>'}
 function exLib(){const set=new Set(["Agachamento livre","Agachamento goblet","Afundo","Levantamento terra","Terra romeno","Supino","Desenvolvimento","Remada curvada","Puxada alta","Barra fixa","Flexão","Burpee","Kettlebell swing","Thruster","Wall ball","Box jump","Corda","Remo ergométrico","Bike","Corrida","Prancha","Abdominal","Mountain climber","Ponte de glúteo"]);state.planos.forEach(p=>diasDe(p).forEach(d=>(d.exs||[]).forEach(e=>e.nome&&set.add(e.nome))));return Array.from(set).sort((a,b)=>a.localeCompare(b,"pt-BR"))}
@@ -1105,13 +1109,14 @@ function blankDia(){return{titulo:"",foco:"",exs:[{nome:"",series:"3",reps:"10",
 function editor(p,q){
   const base=edMode==="new"?null:q;const ciclo=edMode==="next"?q.ciclo+1:edMode==="cur"?q.ciclo:1;
   const ini=edMode==="next"?addDays(q.inicio,14):edMode==="cur"?q.inicio:dkey(monday(new Date()));
-  const ws=semanaDe(p);
+  const ws=semanaDe(p);const modo0=base?modoQ(base):"AB";
   const letra=L=>{const x=base&&base[L];const dias=x?diasDe(x).slice():[];while(dias.length<ws.length)dias.push(blankDia());if(!dias.length)dias.push(blankDia());
     return'<div class="ed-letter" data-letter="'+L+'"'+(L==="B"?" hidden":"")+'><div class="ed-dias">'+dias.map((d,i)=>diaCard(L,i,d)).join("")+'</div><div class="ed-tools"><button type="button" class="btn ghost sm" data-adddia="'+L+'">+ Treino extra na semana</button>'+(L==="B"?'<button type="button" class="btn line sm" id="copy-ab">Copiar Treino A para o B</button>':"")+'</div></div>'};
   return'<form id="ed-form" style="display:grid;gap:14px"><div class="form-grid"><div class="field"><label for="ed-c">Quinzena nº</label><input class="input num" id="ed-c" type="number" min="1" value="'+ciclo+'"></div><div class="field"><label for="ed-i">Começa na segunda-feira</label><input class="input" id="ed-i" type="date" value="'+ini+'"></div></div>'
    +(edMode==="next"?'<p class="banner" style="display:block">Copiei a quinzena '+q.ciclo+'. Ajuste só o que mudou: carga, volume ou uma observação. O aluno vê uma etiqueta em cada ajuste.</p>':"")
    +'<div><span class="lbl">Agenda da quinzena · '+esc(p.apelido)+' treina '+esc(ws.map(d=>WD[d]).join(", "))+'</span><div id="ed-cal" style="margin-top:8px"></div></div>'
-   +'<div class="seg" role="tablist"><button type="button" class="on" data-edl="A">Treino A · semana 1</button><button type="button" data-edl="B">Treino B · semana 2</button></div>'
+   +'<div class="field"><span class="lbl">Modelo da quinzena</span><div class="seg" id="ed-modo" role="radiogroup" aria-label="Modelo da quinzena" data-modo="'+modo0+'"><button type="button" role="radio" data-modo="AB" aria-checked="'+(modo0==="AB")+'"'+(modo0==="AB"?' class="on"':"")+'>Treino A e B</button><button type="button" role="radio" data-modo="A" aria-checked="'+(modo0==="A")+'"'+(modo0==="A"?' class="on"':"")+'>Só Treino A</button></div><small class="muted" id="ed-modo-h">'+(modo0==="A"?"O Treino A se repete nas duas semanas.":"Semana 1 com o Treino A e semana 2 com o Treino B.")+'</small></div>'
+   +'<div class="seg" role="tablist" id="ed-tabs"'+(modo0==="A"?" hidden":"")+'><button type="button" class="on" data-edl="A">Treino A · semana 1</button><button type="button" data-edl="B">Treino B · semana 2</button></div>'
    +'<p class="muted small"><b>Tabata:</b> troque “Normal” por “Tabata” e escolha 2 ou 4 movimentos. É sempre 8 rodadas de 20s de esforço e 10s de descanso (4 min), alternando os movimentos. Carga é opcional em cada movimento. Um Tabata conta como 1 exercício do treino.</p>'
    +'<datalist id="ex-lib">'+exLib().map(n=>'<option value="'+esc(n)+'"></option>').join("")+'</datalist>'
    +letra("A")+letra("B")+'<div class="acts-row"><button class="btn" type="submit">Publicar para '+esc(p.apelido)+'</button><button class="btn line" type="button" id="ed-cancel">Cancelar</button></div></form>'}
@@ -1131,10 +1136,16 @@ function lerRow(r,j){const g=k=>{const x=r.querySelector('[data-f="'+k+'"]');ret
   return Object.assign(o,{tipo:"",nome:g("nome"),series:g("series"),reps:g("reps"),carga:g("carga"),descanso:g("descanso")})}
 function lerLetra(f,L){return Array.from(f.querySelectorAll('[data-letter="'+L+'"] .ed-dia')).map((c,i)=>({id:"d"+(i+1),titulo:c.querySelector('[data-dt="titulo"]').value.trim(),foco:c.querySelector('[data-dt="foco"]').value.trim(),
   exs:Array.from(c.querySelectorAll(".ed-row")).map(lerRow).filter(o=>o.nome).map((o,j)=>Object.assign(o,{id:"e"+(j+1)}))}))}
+const edModo=f=>{const m=f.querySelector("#ed-modo");return m&&m.dataset.modo==="A"?"A":"AB"};
+function setModo(f,m){const box=f.querySelector("#ed-modo");box.dataset.modo=m;box.querySelectorAll("[data-modo]").forEach(b=>{const on=b.dataset.modo===m;b.classList.toggle("on",on);b.setAttribute("aria-checked",on)});
+  f.querySelector("#ed-modo-h").textContent=m==="A"?"O Treino A se repete nas duas semanas.":"Semana 1 com o Treino A e semana 2 com o Treino B.";
+  f.querySelector("#ed-tabs").hidden=m==="A";if(m==="A"){f.querySelectorAll("[data-edl]").forEach(x=>x.classList.toggle("on",x.dataset.edl==="A"));f.querySelectorAll("[data-letter]").forEach(x=>x.hidden=x.dataset.letter!=="A")}relabel(f)}
 function relabel(f){const p=pById(selAluno);const ws=semanaDe(p);let ini=$("#ed-i").value;if(!ini)return;
-  const sess=[];["A","B"].forEach(L=>f.querySelectorAll('[data-letter="'+L+'"] .ed-dia').forEach((c,i)=>{c.querySelector(".dn").textContent=i+1;const wd=ws[i];const dt=wd==null?null:addDays(ini,(L==="B"?7:0)+wdOff(wd));
+  const modo=edModo(f);const sess=[];
+  if(modo==="A")f.querySelectorAll('[data-letter="A"] .ed-dia').forEach((c,i)=>{const wd=ws[i];if(wd==null)return;sess.push({L:"B",R:"A",i,dia:{id:"d"+(i+1)},data:addDays(ini,7+wdOff(wd)),ck:null})});
+  ["A","B"].forEach(L=>{if(modo==="A"&&L==="B")return;f.querySelectorAll('[data-letter="'+L+'"] .ed-dia').forEach((c,i)=>{c.querySelector(".dn").textContent=i+1;const wd=ws[i];const dt=wd==null?null:addDays(ini,(L==="B"?7:0)+wdOff(wd));
     c.querySelector(".dd").textContent=dt?"· "+fdw(dt):"· extra, sem dia na agenda";c.classList.toggle("extra",!dt);
-    if(dt)sess.push({L,i,dia:{id:"d"+(i+1),titulo:c.querySelector('[data-dt="titulo"]').value},data:dt,ck:null})}));
+    if(dt)sess.push({L,R:L,i,dia:{id:"d"+(i+1),titulo:c.querySelector('[data-dt="titulo"]').value},data:dt,ck:null})})});
   $("#ed-cal").innerHTML=calHtml(ini,sess)}
 function bindTreinos(){
   const s=$("#sel-al");if(s)s.onchange=()=>{selAluno=s.value;edMode=null;edOpen=false;renderPainel()};
@@ -1143,6 +1154,7 @@ function bindTreinos(){
   relabel(f);
   $("#ed-i").addEventListener("change",()=>{const v=$("#ed-i").value;if(v){const m=dkey(monday(pd(v)));if(m!==v){$("#ed-i").value=m;toast("A quinzena começa sempre na segunda: ajustei para "+fd(m)+".")}}relabel(f)});
   f.addEventListener("click",e=>{
+    const mo=e.target.closest("[data-modo]");if(mo){setModo(f,mo.dataset.modo);return}
     const t=e.target.closest("[data-edl]");if(t){f.querySelectorAll("[data-edl]").forEach(x=>x.classList.toggle("on",x===t));f.querySelectorAll("[data-letter]").forEach(x=>x.hidden=x.dataset.letter!==t.dataset.edl);return}
     const a=e.target.closest("[data-addrow]");if(a){const box=a.closest(".ed-dia").querySelector(".ed-rows");box.insertAdjacentHTML("beforeend",edRow({series:"3",reps:"10",descanso:"60s"}));box.lastElementChild.querySelector("input").focus();return}
     const d=e.target.closest("[data-delrow]");if(d){d.closest(".ed-row").remove();return}
@@ -1155,11 +1167,12 @@ function bindTreinos(){
     const nv=e.target.closest('[data-f="nmov"]');if(nv){nv.closest(".ed-row").querySelector(".movs").classList.toggle("two",nv.value==="2")}});
   $("#ed-cancel").onclick=()=>{edMode=null;edOpen=false;renderPainel()};
   f.onsubmit=async e=>{e.preventDefault();const p=pById(selAluno);const ws=semanaDe(p);const ciclo=Number($("#ed-c").value)||1;const ini=$("#ed-i").value;if(!ini){toast("Escolha a data de início.");return}
-    const out=[];for(const L of["A","B"]){const dias=lerLetra(f,L);const vazio=dias.findIndex(d=>!d.exs.length);
+    const modo=edModo(f);const out=[];for(const L of(modo==="A"?["A"]:["A","B"])){const dias=lerLetra(f,L);const vazio=dias.findIndex(d=>!d.exs.length);
       if(vazio>=0){toast("O treino "+L+(vazio+1)+" precisa de pelo menos um exercício.");f.querySelector('[data-edl="'+L+'"]').click();return}
       for(const[di,d]of dias.entries()){const t=d.exs.find(x=>x.tipo==="tabata"&&x.faltam);if(t){toast("Treino "+L+(di+1)+": preencha todos os movimentos do Tabata ("+(t.movs.length)+").");f.querySelector('[data-edl="'+L+'"]').click();return}d.exs.forEach(x=>delete x.faltam)}
       dias.forEach((d,i)=>{if(!d.titulo)d.titulo="Treino "+L+(i+1);const wd=ws[i];d.data=wd==null?"":addDays(ini,(L==="B"?7:0)+wdOff(wd))});
-      out.push({id:safeId(p.id+"-c"+ciclo+L),alunoId:p.id,ciclo,inicio:ini,letra:L,dias})}
+      out.push({id:safeId(p.id+"-c"+ciclo+L),alunoId:p.id,ciclo,inicio:ini,letra:L,modo,dias})}
+    if(modo==="A"){const a=out[0];out.push({id:safeId(p.id+"-c"+ciclo+"B"),alunoId:p.id,ciclo,inicio:ini,letra:"B",modo,espelho:true,dias:a.dias.map((d,i)=>{const wd=ws[i];return Object.assign(JSON.parse(JSON.stringify(d)),{data:wd==null?"":addDays(ini,7+wdOff(wd))})})})}
     for(const o of out){if(!await api.set("planos",o.id,o))return}
     edMode=null;edOpen=false;toast("Quinzena "+ciclo+" publicada para "+p.apelido+".");renderPainel()}}
 

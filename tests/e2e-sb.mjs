@@ -49,7 +49,7 @@ const srv=http.createServer((req,res)=>{let p=decodeURIComponent(req.url.split('
 const URL0='http://127.0.0.1:'+srv.address().port+'/';
 const R=[];const ok=(n,c,x)=>R.push((c?'PASS ':'FAIL ')+n+(x!==undefined&&!c?' — '+String(x).slice(0,140):''));
 const sql=async q=>(await db.query(q)).rows;
-const browser=await chromium.launch();const ctx=await browser.newContext({viewport:{width:400,height:880}});const page=await ctx.newPage();
+const browser=await chromium.launch({executablePath:process.env.CHROME_PATH||undefined});const ctx=await browser.newContext({viewport:{width:400,height:880}});const page=await ctx.newPage();
 const errs=[];page.on('pageerror',e=>errs.push(e.message));page.on('console',m=>{if(m.type()==='error'&&!/Failed to load resource|fonts\.g/.test(m.text()))errs.push(m.text())});
 await page.exposeFunction('__pg',s=>serial(()=>handle(JSON.parse(s))).then(JSON.stringify));
 const login=async(u,p)=>{await page.fill('#lg-user',u);await page.fill('#lg-pass',p);await page.click('#lg-btn')};
@@ -138,7 +138,7 @@ try{
   const hojeK=(n=0)=>{const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
   const an=(await sql("select id from public.docs where col='perfis' and data->>'login'='aninha'"))[0].id;
   await page.evaluate(()=>{navigator.clipboard.writeText=async()=>{}});
-  await page.click('#ptabs [data-tab="fin"]');await page.waitForSelector('.fin-stats');
+  await page.click('#ptabs [data-tab="fin"]');await page.waitForSelector('.fin-stats');await page.waitForFunction(()=>document.querySelector('#painel').textContent.includes('Definir o plano'),null,{timeout:8000}).catch(()=>{});
   ok('Financeiro abre com visão do mês e próximos passos',(await page.textContent('#painel')).includes('Próximos passos')&&(await page.textContent('#painel')).includes('Definir o plano'));
   await page.click(`#painel [data-finopen="${an}"]`);await page.selectOption('#ff-pl','atleta');await page.click('#ff button[type="submit"]');await page.waitForTimeout(900);
   ok('Coach define plano Atleta',(await sql(`select data->>'plano' p from public.docs where col='fin' and id='${an}'`))[0]?.p==='atleta');
