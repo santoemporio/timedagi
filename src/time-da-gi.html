@@ -812,7 +812,7 @@ function renderAll(force){
   if(!ready()){showOnly("load");return}
   const m=me();
   if(!m&&useSB&&authU){const pp=pById(authU.id);sbLogout(pp&&pp.arquivado?"Seu acesso está pausado. Fale com a Gi.":"Seu cadastro não foi encontrado. Fale com a Gi.");return}
-  if(!m){if(sess){sess=null;LS.del("tg_sess3")}showOnly("gate");$("#cfg-warn").hidden=!((TGC||window.supabase)&&state.mode==="local");$("#foot").textContent="Time da Gi · zooei! × Coach Gi · versão 14";return}
+  if(!m){if(sess){sess=null;LS.del("tg_sess3")}showOnly("gate");$("#cfg-warn").hidden=!((TGC||window.supabase)&&state.mode==="local");$("#foot").textContent="Time da Gi · zooei! × Coach Gi · versão 15";return}
   watchFin();if(m==="coach"){watchContatos();watchAnamnese()}
   if(view==="eu"&&m==="coach")view="painel";
   if(view==="painel"&&m!=="coach")view="mural";
@@ -1099,7 +1099,7 @@ function pTreinos(){
   const p=pById(selAluno),q=ultima(selAluno),qa=quinzena(selAluno);
   let h='<div class="card"><div class="form-grid"><div class="field"><label for="sel-al">Aluno</label><select class="input" id="sel-al">'+al.map(x=>'<option value="'+esc(x.id)+'"'+(x.id===selAluno?" selected":"")+'>'+esc(x.nome)+" ("+esc(x.apelido)+")</option>").join("")+'</select></div><div class="field"><span class="lbl">Treina '+esc(semanaDe(p).map(d=>WD[d]).join(", "))+'</span><p style="font-weight:600;padding-top:8px">'+esc(p.objetivo||p.objetivoMural||"—")+'</p></div></div>';
   if(edMode){edOpen=true;return h+editor(p,q)+'</div>'}
-  h+='<div class="acts-row">'+(q?'<button class="btn" id="ed-next">Montar quinzena '+(q.ciclo+1)+' (copia a atual)</button><button class="btn line" id="ed-cur">Editar quinzena '+q.ciclo+'</button>':'<button class="btn" id="ed-new">Criar primeira quinzena</button>')+'</div>';
+  h+='<div class="acts-row">'+(q?'<button class="btn" id="ed-next">Montar quinzena '+(q.ciclo+1)+' (copia a atual)</button><button class="btn line" id="ed-cur">Editar quinzena '+q.ciclo+'</button><button class="btn wa" id="ed-avisar">Avisar atleta'+(q.A&&q.A.avisadoEm?" ✓":"")+'</button>':'<button class="btn" id="ed-new">Criar primeira quinzena</button>')+'</div>';
   if(q){h+='<p class="muted small">Quinzena '+q.ciclo+' · '+fd(q.inicio)+' a '+fd(q.fim)+(q.futura?' · <b>agendada</b>: o aluno vê a partir de '+fd(q.inicio)+(qa&&qa.ciclo!==q.ciclo?" (hoje ele está na quinzena "+qa.ciclo+")":""):' · Meta de '+2*freqDe(p)+' treinos, feitos '+sessoes(p.id,q.ciclo))+'.</p>'
     +calHtml(q.inicio,sessoesQ(q,p))
     +'<p class="muted small">Modelo: <b>'+(modoQ(q)==="A"?"Só Treino A (repete na semana 2)":"Treino A e B")+'</b></p>'
@@ -1153,7 +1153,7 @@ function relabel(f){const p=pById(selAluno);const ws=semanaDe(p);let ini=$("#ed-
   $("#ed-cal").innerHTML=calHtml(ini,sess)}
 function bindTreinos(){
   const s=$("#sel-al");if(s)s.onchange=()=>{selAluno=s.value;edMode=null;edOpen=false;renderPainel()};
-  const b=(id,m)=>{const x=$(id);if(x)x.onclick=()=>{edMode=m;renderPainel()}};b("#ed-next","next");b("#ed-cur","cur");b("#ed-new","new");
+  const b=(id,m)=>{const x=$(id);if(x)x.onclick=()=>{edMode=m;renderPainel()}};b("#ed-next","next");b("#ed-cur","cur");b("#ed-new","new");{const av=$("#ed-avisar");if(av)av.onclick=()=>{const p=pById(selAluno);const q=ultima(p.id)||quinzena(p.id);if(q)avisoPlanilha(p,q.A,q.B)}}
   const f=$("#ed-form");if(!f){edOpen=false;return}
   relabel(f);
   $("#ed-i").addEventListener("change",()=>{const v=$("#ed-i").value;if(v){const ws0=semanaDe(pById(selAluno));const m=proxTreino(v,ws0);if(m!==v){$("#ed-i").value=m;toast(fdw(v)+" não é dia de treino: a quinzena começa no próximo, "+fdw(m)+".")}}relabel(f)});
@@ -1178,7 +1178,29 @@ function bindTreinos(){
       out.push({id:safeId(p.id+"-c"+ciclo+L),alunoId:p.id,ciclo,inicio:ini,letra:L,modo,dias})}
     if(modo==="A"){const a=out[0];out.push({id:safeId(p.id+"-c"+ciclo+"B"),alunoId:p.id,ciclo,inicio:ini,letra:"B",modo,espelho:true,dias:a.dias.map((d,i)=>{const wd=ws[i];return Object.assign(JSON.parse(JSON.stringify(d)),{data:wd==null?"":(datasSemana(ini,1,ws)[i]||"")})})})}
     for(const o of out){if(!await api.set("planos",o.id,o))return}
-    edMode=null;edOpen=false;toast("Quinzena "+ciclo+" publicada para "+p.apelido+".");renderPainel()}}
+    edMode=null;edOpen=false;toast("Quinzena "+ciclo+" publicada para "+p.apelido+".");renderPainel();
+    const pa=out.find(o=>o.letra==="A"),pb=out.find(o=>o.letra==="B");setTimeout(()=>avisoPlanilha(p,pa,pb),350)}}
+/* aviso de planilha publicada: texto da IA (ou modelo) + link do app e usuário do sistema */
+function resumoQ(p,A,B){const ss=[];[A,B].forEach(pl=>{if(!pl)return;diasDe(pl).forEach((d,i)=>{const dt=d.data||dataSessao(pl,i,p);ss.push({rot:rotL(pl)+(i+1),titulo:d.titulo||"Treino",foco:d.foco||"",data:dt||""})})});
+  ss.sort((a,b)=>String(a.data).localeCompare(b.data));const ini=(A&&A.inicio)||ss[0]&&ss[0].data;
+  return{ciclo:A&&A.ciclo,inicio:ini,fim:ini?addDays(ini,13):"",modo:B&&B.espelho?"A":"AB",total:ss.length,treinos:ss}}
+function fechoApp(p){return"\n\n📲 "+appUrl()+"\nUsuário: *"+p.login+"*"}
+function msgPlanilhaModelo(p,r){const a=anamDe(p.id),d=(a&&a.d)||{};const obj=String(d.objetivo||p.objetivo||p.objetivoMural||"").trim().replace(/[.!]+$/,"");
+  const t0=r.treinos[0];const novo=Number(r.ciclo)<=1;
+  let t="Oi, "+nome1(p)+"! "+(novo?"Tua planilha está pronta e já está no app 💪":"A quinzena "+r.ciclo+" está no app, com os ajustes do que tu me mostrou nos treinos 💪");
+  if(obj)t+="\n\nCada treino foi pensado para *"+obj.charAt(0).toLowerCase()+obj.slice(1)+"*.";
+  if(t0)t+=" São *"+r.total+" treinos* nesta quinzena, começando "+fdw(t0.data).toLowerCase()+" com o "+t0.rot+" · "+t0.titulo+".";
+  t+=r.modo==="A"?"\n\nNa segunda semana a gente repete os mesmos treinos: assim tu pega o ritmo e eu consigo ajustar com precisão.":"\n\nNa semana 1 é o Treino A e na semana 2 o Treino B.";
+  t+="\n\nRegistra cada treino no app (carga, esforço e como foi). É com isso que eu monto a próxima quinzena.";return t}
+async function textoIAPlanilha(p,r){if(!useSB||!sb||!sb.functions)return{erro:"indisponivel"};
+  try{const{data,error}=await sb.functions.invoke("boas-vindas",{body:{alunoId:p.id,tipo:"planilha",resumo:r}});
+    if(error){let c="";try{const j=await error.context.json();c=j.error||""}catch(e){}return{erro:c||"falha"}}
+    return data&&data.texto?{texto:data.texto}:{erro:"vazio"}}catch(e){return{erro:"falha"}}}
+async function avisoPlanilha(p,A,B){if(!p||!A)return;const r=resumoQ(p,A,B);
+  sheet('<div class="sheet-top">'+avi(p,52)+'<div style="min-width:0"><span class="eyebrow">Planilha publicada</span><h3 style="margin-top:4px">'+esc(p.nome)+'</h3></div></div><div class="empty">✍️ Escrevendo o aviso para '+esc(nome1(p))+'…</div>',"Avisar atleta");
+  const x=await textoIAPlanilha(p,r);const ok=!!x.texto;const txt=(ok?x.texto.trim():msgPlanilhaModelo(p,r))+fechoApp(p);
+  msgSheet(p,ok?"Planilha publicada · aviso escrito para "+nome1(p):"Planilha publicada · aviso",txt,()=>api.update("planos",A.id,{avisadoEm:dkey(new Date())}));
+  const row=$("#sheet-root .acts-row");if(row&&useSB){const b=document.createElement("button");b.type="button";b.className="btn line";b.textContent=ok?"Escrever outra versão":"Tentar com IA de novo";b.onclick=()=>avisoPlanilha(p,A,B);row.appendChild(b)}}
 
 /* --- alunos --- */
 function pAlunos(){const e=editAluno?pById(editAluno):null;const mes=dkey(new Date()).slice(0,7);

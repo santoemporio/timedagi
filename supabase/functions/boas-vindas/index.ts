@@ -28,7 +28,9 @@ Deno.serve(async (req) => {
     });
     const { data: adm } = await sb.rpc("is_admin");
     if (adm !== true) return json({ error: "somente_coach" }, 403);
-    const { alunoId } = await req.json();
+    const body = await req.json();
+    const { alunoId } = body;
+    const tipo = body.tipo === "planilha" ? "planilha" : "boas-vindas";
     if (!alunoId) return json({ error: "sem_aluno" }, 400);
     const { data: rows, error } = await sb.from("docs").select("col,id,data").in("col", ["perfis", "anamnese", "fin"]).eq("id", alunoId);
     if (error) return json({ error: "leitura" }, 500);
@@ -40,7 +42,27 @@ Deno.serve(async (req) => {
     const ficha = Object.entries(CAMPOS).map(([k, l]) => d[k] ? `- ${l}: ${String(d[k]).slice(0, 600)}` : "").filter(Boolean).join("\n");
     const isento = fin && (fin.plano === "isento" || (fin.plano === "personalizado" && !Number(fin.valor)));
 
-    const system = `Tu és a Coach Gi (Giovana), profissional de Educação Física, escrevendo no WhatsApp para um(a) novo(a) atleta que acabou de preencher a ficha de anamnese.
+    let system: string, user: string;
+    if (tipo === "planilha") {
+      const r = body.resumo || {};
+      const tr = (Array.isArray(r.treinos) ? r.treinos : []).slice(0, 14)
+        .map((t: { rot: string; titulo: string; foco: string; data: string }) => `- ${t.data} · ${t.rot} · ${t.titulo}${t.foco ? " (" + t.foco + ")" : ""}`).join("\n");
+      system = `Tu és a Coach Gi (Giovana), profissional de Educação Física, avisando no WhatsApp um(a) atleta do Time da Gi que a planilha da quinzena está pronta e já publicada no app.
+Escreve em português do Brasil com o jeito gaúcho da Gi: trata por "tu", calorosa, direta e animada, sem exageros.
+Regras:
+- Começa com "Oi, ${primeiro}!" e diz que a planilha está pronta e já está no app.
+- Conecta a planilha ao objetivo da pessoa com as palavras certas (usa o objetivo e a ficha; escolhe 1 detalhe concreto, não lista tudo).
+- Diz quando e com qual treino começa (dia da semana e o título do primeiro treino) e quantos treinos tem a quinzena.
+- Se o modelo for "Só Treino A", explica em meia frase que a semana 2 repete os treinos da semana 1. Se for "A e B", diz que a semana 2 traz o Treino B.
+- Pede para registrar cada treino no app (carga, esforço e como foi), porque é isso que guia o ajuste da próxima quinzena.
+- Seja criativa e única: nada de frase genérica de academia. Pode usar uma imagem curta ligada ao objetivo.
+- NÃO escrevas link, usuário, senha ou valores: isso é anexado automaticamente.
+- No máximo 2 emojis. Negrito do WhatsApp com *asteriscos*; sem markdown, sem listas, sem assinatura.
+- Entre 350 e 700 caracteres, em 2 ou 3 parágrafos curtos.
+- Responde só com o texto da mensagem.`;
+      user = `Primeiro nome: ${primeiro}\nQuinzena número: ${r.ciclo ?? "?"}${Number(r.ciclo) <= 1 ? " (é a primeira planilha da pessoa)" : ""}\nPeríodo: ${r.inicio || "?"} a ${r.fim || "?"}\nModelo: ${r.modo === "A" ? "Só Treino A (semana 2 repete)" : "Treino A e B"}\nTotal de treinos: ${r.total ?? "?"}\nTreinos em ordem:\n${tr || "(sem detalhe)"}\nObjetivo cadastrado: ${perfil.objetivo || perfil.objetivoMural || "(não informado)"}\nFicha de anamnese:\n${ficha || "(ficha vazia)"}`;
+    } else {
+    system = `Tu és a Coach Gi (Giovana), profissional de Educação Física, escrevendo no WhatsApp para um(a) novo(a) atleta que acabou de preencher a ficha de anamnese.
 Escreve em português do Brasil com o jeito gaúcho da Gi: trata por "tu", calorosa, próxima, profissional, sem exageros.
 Regras:
 - Começa com "Oi, ${primeiro}!" e agradece pela ficha.
@@ -51,7 +73,8 @@ Regras:
 - No máximo 2 emojis. Para negrito do WhatsApp usa *asteriscos*; sem markdown, sem listas, sem assinatura.
 - Entre 450 e 900 caracteres, em 2 ou 3 parágrafos curtos.
 - Responde só com o texto da mensagem.`;
-    const user = `Primeiro nome: ${primeiro}\nObjetivo cadastrado pela coach: ${perfil.objetivo || perfil.objetivoMural || "(não informado)"}\nFicha de anamnese:\n${ficha || "(ficha vazia)"}`;
+    user = `Primeiro nome: ${primeiro}\nObjetivo cadastrado pela coach: ${perfil.objetivo || perfil.objetivoMural || "(não informado)"}\nFicha de anamnese:\n${ficha || "(ficha vazia)"}`;
+    }
 
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",

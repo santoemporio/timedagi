@@ -117,6 +117,7 @@ const ok = (name, cond, extra) => { results.push((cond ? "PASS " : "FAIL ") + na
   await (await rows0[1].$('[data-f="nmov"]')).selectOption("2");
   const mvs = await rows0[1].$$('[data-mv="nome"]'), kgs = await rows0[1].$$('[data-mv="carga"]');
   await mvs[0].fill("Burpee");
+  const fecharAviso = async () => { await page.waitForTimeout(500); if (await page.$("#ms-t")) { await page.keyboard.press("Escape"); await page.waitForTimeout(200); } };
   await (await diasA[1].$('[data-dt="titulo"]')).fill("Inferiores");
   await (await diasA[1].$('[data-f="nome"]')).fill("Agachamento"); await (await diasA[1].$('[data-f="carga"]')).fill("30 kg");
   await page.click('[data-edl="B"]'); await page.click('[data-edl="A"]');
@@ -128,6 +129,10 @@ const ok = (name, cond, extra) => { results.push((cond ? "PASS " : "FAIL ") + na
   const bTit = await page.$$eval('[data-letter="B"] [data-dt="titulo"]', x => x.map(i => i.value));
   ok("'Copiar Treino A para o B' replica os 2 treinos", bTit.join() === "Superiores,Inferiores", bTit.join());
   await page.click('#ed-form button[type="submit"]'); await page.waitForTimeout(200);
+  await page.waitForSelector("#ms-t", { timeout: 4000 });
+  { const av = await page.inputValue("#ms-t"); ok("Ao publicar, abre o aviso pronto para o atleta (primeiro nome, nº de treinos, usuário do app)", /^Oi, \S+!/.test(av) && /treinos/.test(av) && /Usuário: \*/.test(av) && /Registra cada treino/.test(av), av.slice(0, 160)); }
+  ok("Aviso tem botão de WhatsApp do atleta", ((await page.getAttribute("#ms-wa", "href")) || "").startsWith("https://wa.me/"));
+  await page.keyboard.press("Escape"); await page.waitForTimeout(200);
   st = await store();
   const planos = Object.keys(st).filter(k => k.startsWith("planos/"));
   ok("Quinzena publicada com A e B", planos.length === 2);
@@ -142,10 +147,12 @@ const ok = (name, cond, extra) => { results.push((cond ? "PASS " : "FAIL ") + na
   ok("Próxima quinzena vem copiada", (await firstCarga.inputValue()) === "20 kg");
   await firstCarga.fill("22,5 kg");
   await page.click('#ed-form button[type="submit"]'); await page.waitForTimeout(200);
+  await fecharAviso();
   st = await store();
   ok("Quinzena 2 criada", Object.keys(st).filter(k => k.startsWith("planos/")).length === 4);
 
   await page.click("#ed-next"); await page.click('#ed-form button[type="submit"]'); await page.waitForTimeout(200);
+  await fecharAviso();
   ok("Quinzena 3 fica agendada (futura) para a coach", (await page.textContent("#painel")).includes("agendada"));
   // 6b. Modelo "Só Treino A": semana 2 repete o A
   await page.click("#ed-cur"); await page.waitForSelector("#ed-form");
@@ -154,6 +161,7 @@ const ok = (name, cond, extra) => { results.push((cond ? "PASS " : "FAIL ") + na
   ok("Só Treino A esconde as abas e o Treino B", await page.isHidden("#ed-tabs") && await page.isHidden('[data-letter="B"]'));
   ok("Prévia da agenda mostra o A também na semana 2", (await page.textContent("#ed-cal")).includes("Semana 2 · Treino A"));
   await page.click('#ed-form button[type="submit"]'); await page.waitForTimeout(250);
+  await fecharAviso();
   { const st3 = await store(); const ks = Object.keys(st3).filter(k => k.startsWith("planos/") && st3[k].ciclo === 3);
     const A3 = ks.map(k => st3[k]).find(x => x.letra === "A"), B3 = ks.map(k => st3[k]).find(x => x.letra === "B");
     ok("Só A grava a semana 2 como espelho do A, com datas +7 dias", A3 && B3 && B3.espelho === true && A3.modo === "A" && B3.dias.length === A3.dias.length && B3.dias[0].exs.length === A3.dias[0].exs.length && B3.dias[0].data === (()=>{const d=new Date(A3.dias[0].data+"T12:00:00");d.setDate(d.getDate()+7);return d.toISOString().slice(0,10)})(), JSON.stringify([A3&&A3.dias[0].data,B3&&B3.dias[0].data]));
@@ -161,6 +169,9 @@ const ok = (name, cond, extra) => { results.push((cond ? "PASS " : "FAIL ") + na
   await page.click("#ed-cur"); ok("Ao reabrir, o editor lembra o modelo Só A", (await page.getAttribute("#ed-modo", "data-modo")) === "A");
   await page.click('#ed-modo [data-modo="AB"]'); ok("Voltar para A e B mostra o Treino B de novo", !(await page.isHidden("#ed-tabs")));
   await page.click("#ed-cancel");
+  await page.click("#ed-avisar"); await page.waitForSelector("#ms-t", { timeout: 4000 });
+  { const av2 = await page.inputValue("#ms-t"); ok("Botão 'Avisar atleta' reabre o aviso; no Só A explica que a semana 2 repete", av2.includes("Na segunda semana a gente repete") && av2.includes("Usuário: *"), av2.slice(0, 200)); }
+  await page.keyboard.press("Escape"); await page.waitForTimeout(200);
   // 7. logout, login aluno
   await page.click("#nav-sair");
   await page.fill("#lg-user", "pablo"); await page.fill("#lg-pass", "4321"); await page.click("#lg-btn");
